@@ -298,13 +298,7 @@ where
     W: Write,
 {
     async fn try_chat(&mut self) -> Result<()> {
-        if self.interactive
-            && self
-                .settings
-                .get_bool("chat.greeting.enabled")
-                .unwrap_or_default()
-                .unwrap_or(true)
-        {
+        if self.interactive && self.settings.get_bool_or("chat.greeting.enabled", true) {
             execute!(self.output, style::Print(WELCOME_TEXT))?;
         }
 
