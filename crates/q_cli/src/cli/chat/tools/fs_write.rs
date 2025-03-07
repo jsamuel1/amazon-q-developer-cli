@@ -46,10 +46,7 @@ pub enum FsWrite {
         new_str: String,
     },
     #[serde(rename = "append")]
-    Append {
-        path: String,
-        content: String,
-    },
+    Append { path: String, content: String },
 }
 
 impl FsWrite {
@@ -128,14 +125,14 @@ impl FsWrite {
             },
             FsWrite::Append { path, content } => {
                 let path = sanitize_path_tool_arg(ctx, path);
-                
+
                 // Create the file if it doesn't exist
                 if !fs.exists(&path) {
                     if let Some(parent) = path.parent() {
                         fs.create_dir_all(parent).await?;
                     }
                 }
-                
+
                 queue!(
                     updates,
                     style::Print("Appending to: "),
@@ -144,20 +141,20 @@ impl FsWrite {
                     style::ResetColor,
                     style::Print("\n"),
                 )?;
-                
+
                 // Read existing content if file exists
                 let mut file_content = if fs.exists(&path) {
                     fs.read_to_string(&path).await.unwrap_or_default()
                 } else {
                     String::new()
                 };
-                
+
                 // Add a newline before appending if the file doesn't end with one
                 // and there's existing content
                 if !file_content.is_empty() && !file_content.ends_with('\n') {
                     file_content.push('\n');
                 }
-                
+
                 // Append the new content
                 file_content.push_str(content);
                 fs.write(&path, file_content).await?;
@@ -415,7 +412,7 @@ mod tests {
         });
         let fw = serde_json::from_value::<FsWrite>(v).unwrap();
         assert!(matches!(fw, FsWrite::Insert { .. }));
-        
+
         // append
         let v = serde_json::json!({
             "path": path,
@@ -638,12 +635,12 @@ mod tests {
         let actual = ctx.fs().read_to_string(test_file_path).await.unwrap();
         assert_eq!(actual, format!("{}{}{}", new_str, test_file_contents, new_str),);
     }
-    
+
     #[tokio::test]
     async fn test_fs_write_tool_append() {
         let ctx = setup_test_directory().await;
         let mut stdout = std::io::stdout();
-        
+
         // Test appending to existing file
         let content_to_append = "\n5: Appended line";
         let v = serde_json::json!({
@@ -651,20 +648,20 @@ mod tests {
             "command": "append",
             "content": content_to_append,
         });
-        
+
         serde_json::from_value::<FsWrite>(v)
             .unwrap()
             .invoke(&ctx, &mut stdout)
             .await
             .unwrap();
-            
+
         let actual = ctx.fs().read_to_string(TEST_FILE_PATH).await.unwrap();
         assert_eq!(
             actual,
             format!("{}{}", TEST_FILE_CONTENTS, content_to_append),
             "Content should be appended to the end of the file"
         );
-        
+
         // Test appending to non-existent file (should create it)
         let new_file_path = "/new_append_file.txt";
         let content = "This is a new file created by append";
@@ -673,20 +670,16 @@ mod tests {
             "command": "append",
             "content": content,
         });
-        
+
         serde_json::from_value::<FsWrite>(v)
             .unwrap()
             .invoke(&ctx, &mut stdout)
             .await
             .unwrap();
-            
+
         let actual = ctx.fs().read_to_string(new_file_path).await.unwrap();
-        assert_eq!(
-            actual,
-            content,
-            "New file should be created with the content"
-        );
-        
+        assert_eq!(actual, content, "New file should be created with the content");
+
         // Test appending more content to the newly created file
         let more_content = "\nMore content appended";
         let v = serde_json::json!({
@@ -694,13 +687,13 @@ mod tests {
             "command": "append",
             "content": more_content,
         });
-        
+
         serde_json::from_value::<FsWrite>(v)
             .unwrap()
             .invoke(&ctx, &mut stdout)
             .await
             .unwrap();
-            
+
         let actual = ctx.fs().read_to_string(new_file_path).await.unwrap();
         assert_eq!(
             actual,
