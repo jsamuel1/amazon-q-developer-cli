@@ -149,6 +149,13 @@ impl FsWrite {
                     String::new()
                 };
 
+                // Check if we need to add a newline before appending
+                // Only add a newline if the file is not empty and doesn't already end with one
+                // Also don't add a newline if the new content starts with one
+                if !file_content.is_empty() && !file_content.ends_with('\n') && !new_str.starts_with('\n') {
+                    file_content.push('\n');
+                }
+
                 // Append the new content
                 file_content.push_str(new_str);
                 fs.write(&path, file_content).await?;
@@ -689,10 +696,11 @@ mod tests {
             .unwrap();
 
         let actual = ctx.fs().read_to_string(new_file_path).await.unwrap();
+        // The content already has a newline at the beginning of more_content
         assert_eq!(
             actual,
-            format!("{}{}", content, more_content),
-            "Content should be appended to the existing file"
+            format!("{}\n{}", content, more_content.trim_start()),
+            "Content should be appended to the existing file with a newline added"
         );
     }
 
