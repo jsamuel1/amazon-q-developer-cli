@@ -46,7 +46,7 @@ pub enum FsWrite {
         new_str: String,
     },
     #[serde(rename = "append")]
-    Append { path: String, content: String },
+    Append { path: String, new_str: String },
 }
 
 impl FsWrite {
@@ -123,7 +123,7 @@ impl FsWrite {
                 fs.write(&path, &file).await?;
                 Ok(Default::default())
             },
-            FsWrite::Append { path, content } => {
+            FsWrite::Append { path, new_str } => {
                 let path = sanitize_path_tool_arg(ctx, path);
 
                 // Create the file if it doesn't exist
@@ -149,14 +149,8 @@ impl FsWrite {
                     String::new()
                 };
 
-                // Add a newline before appending if the file doesn't end with one
-                // and there's existing content
-                if !file_content.is_empty() && !file_content.ends_with('\n') {
-                    file_content.push('\n');
-                }
-
                 // Append the new content
-                file_content.push_str(content);
+                file_content.push_str(new_str);
                 fs.write(&path, file_content).await?;
                 Ok(Default::default())
             },
@@ -249,9 +243,9 @@ impl FsWrite {
                 )?;
                 Ok(())
             },
-            FsWrite::Append { path, content } => {
+            FsWrite::Append { path, new_str } => {
                 let relative_path = format_path(cwd, path);
-                let file = stylize_output_if_able(ctx, &relative_path, content, None, Some("+"));
+                let file = stylize_output_if_able(ctx, &relative_path, new_str, None, Some("+"));
                 queue!(
                     updates,
                     style::Print("Path: "),
@@ -280,11 +274,11 @@ impl FsWrite {
                     bail!("The provided path must exist in order to replace or insert contents into it")
                 }
             },
-            FsWrite::Append { path, content } => {
+            FsWrite::Append { path, new_str } => {
                 if path.is_empty() {
                     bail!("Path must not be empty")
                 };
-                if content.is_empty() {
+                if new_str.is_empty() {
                     bail!("Content to append must not be empty")
                 };
             },
@@ -417,7 +411,7 @@ mod tests {
         let v = serde_json::json!({
             "path": path,
             "command": "append",
-            "content": "appended content",
+            "new_str": "appended content",
         });
         let fw = serde_json::from_value::<FsWrite>(v).unwrap();
         assert!(matches!(fw, FsWrite::Append { .. }));
@@ -646,7 +640,7 @@ mod tests {
         let v = serde_json::json!({
             "path": TEST_FILE_PATH,
             "command": "append",
-            "content": content_to_append,
+            "new_str": content_to_append,
         });
 
         serde_json::from_value::<FsWrite>(v)
@@ -668,7 +662,7 @@ mod tests {
         let v = serde_json::json!({
             "path": new_file_path,
             "command": "append",
-            "content": content,
+            "new_str": content,
         });
 
         serde_json::from_value::<FsWrite>(v)
@@ -685,7 +679,7 @@ mod tests {
         let v = serde_json::json!({
             "path": new_file_path,
             "command": "append",
-            "content": more_content,
+            "new_str": more_content,
         });
 
         serde_json::from_value::<FsWrite>(v)

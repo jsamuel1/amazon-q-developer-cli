@@ -54,15 +54,11 @@
           "type": "integer"
         },
         "new_str": {
-          "description": "Required parameter of `str_replace` command containing the new string. Required parameter of `insert` command containing the string to insert.",
+          "description": "Required parameter of `str_replace` command containing the new string. Required parameter of `insert` command containing the string to insert. Required parameter of `append` command containing the content to append to the file.",
           "type": "string"
         },
         "old_str": {
           "description": "Required parameter of `str_replace` command containing the string in `path` to replace.",
-          "type": "string"
-        },
-        "content": {
-          "description": "Required parameter of `append` command containing the content to append to the file.",
           "type": "string"
         },
         "path": {
