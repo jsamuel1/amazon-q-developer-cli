@@ -126,11 +126,9 @@ impl FsWrite {
             FsWrite::Append { path, new_str } => {
                 let path = sanitize_path_tool_arg(ctx, path);
 
-                // Create the file if it doesn't exist
+                // Return an error if the file doesn't exist
                 if !fs.exists(&path) {
-                    if let Some(parent) = path.parent() {
-                        fs.create_dir_all(parent).await?;
-                    }
+                    bail!("The file does not exist: {}", path.display());
                 }
 
                 queue!(
@@ -142,12 +140,8 @@ impl FsWrite {
                     style::Print("\n"),
                 )?;
 
-                // Read existing content if file exists
-                let mut file_content = if fs.exists(&path) {
-                    fs.read_to_string(&path).await.unwrap_or_default()
-                } else {
-                    String::new()
-                };
+                // Read existing content
+                let mut file_content = fs.read_to_string(&path).await.unwrap_or_default();
 
                 // Check if we need to add a newline before appending
                 // Only add a newline if the file is not empty and doesn't already end with one
@@ -663,7 +657,7 @@ mod tests {
             "Content should be appended to the end of the file"
         );
 
-        // Test appending to non-existent file (should create it)
+        // Test appending to non-existent file (should fail)
         let new_file_path = "/new_append_file.txt";
         let content = "This is a new file created by append";
         let v = serde_json::json!({
@@ -672,15 +666,15 @@ mod tests {
             "new_str": content,
         });
 
-        serde_json::from_value::<FsWrite>(v)
+        let result = serde_json::from_value::<FsWrite>(v)
             .unwrap()
             .invoke(&ctx, &mut stdout)
-            .await
-            .unwrap();
+            .await;
+        
+        assert!(result.is_err(), "Appending to non-existent file should fail");
 
-        let actual = ctx.fs().read_to_string(new_file_path).await.unwrap();
-        assert_eq!(actual, content, "New file should be created with the content");
-
+        // This test is no longer valid since we changed the behavior to not create files
+        /*
         // Test appending more content to the newly created file
         let more_content = "\nMore content appended";
         let v = serde_json::json!({
@@ -702,6 +696,7 @@ mod tests {
             format!("{}\n{}", content, more_content.trim_start()),
             "Content should be appended to the existing file with a newline added"
         );
+        */
     }
 
     #[test]
