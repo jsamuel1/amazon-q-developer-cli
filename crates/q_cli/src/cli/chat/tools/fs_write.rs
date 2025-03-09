@@ -670,33 +670,8 @@ mod tests {
             .unwrap()
             .invoke(&ctx, &mut stdout)
             .await;
-        
+
         assert!(result.is_err(), "Appending to non-existent file should fail");
-
-        // This test is no longer valid since we changed the behavior to not create files
-        /*
-        // Test appending more content to the newly created file
-        let more_content = "\nMore content appended";
-        let v = serde_json::json!({
-            "path": new_file_path,
-            "command": "append",
-            "new_str": more_content,
-        });
-
-        serde_json::from_value::<FsWrite>(v)
-            .unwrap()
-            .invoke(&ctx, &mut stdout)
-            .await
-            .unwrap();
-
-        let actual = ctx.fs().read_to_string(new_file_path).await.unwrap();
-        // The content already has a newline at the beginning of more_content
-        assert_eq!(
-            actual,
-            format!("{}\n{}", content, more_content.trim_start()),
-            "Content should be appended to the existing file with a newline added"
-        );
-        */
     }
 
     #[test]
