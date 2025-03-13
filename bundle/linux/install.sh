@@ -59,7 +59,6 @@ is_target_triple_gnu() {
 # Minimum required glibc version
 GLIBC_MIN_MAJOR=2
 GLIBC_MIN_MINOR=34
-
 # Check if a glibc version meets the minimum requirement
 is_glibc_version_sufficient() {
     local version="$1"
