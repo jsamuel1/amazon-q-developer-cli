@@ -64,6 +64,8 @@ check_glibc_version() {
         LIBC_PATH=/lib/libc.so.6
     elif [ -f /usr/lib/x86_64-linux-gnu/libc.so.6 ]; then
         LIBC_PATH=/usr/lib/x86_64-linux-gnu/libc.so.6
+    elif [ -f /usr/lib/aarch64-linux-gnu/libc.so.6 ]; then
+        LIBC_PATH=/usr/lib/aarch64-linux-gnu/libc.so.6
     else
         log_error "Could not find glibc."
         return 1
