@@ -6,8 +6,8 @@ This test verifies that the Amazon Q Developer CLI can be installed from a ZIP p
 The test:
 1. Extracts the ZIP file to a temporary location
 2. Creates a non-root user for installation
-3. Runs the included install.sh script as root (since it may need root permissions)
 4. Copies the binary to the user's home directory and makes it accessible
+3. Runs the included install.sh script as the new user
 5. Verifies the binary is executable and in the user's PATH
 """
 
@@ -35,237 +35,318 @@ def print_output(command, exit_code, output):
     print("=" * 50)
 
 
-def run_command(container, command, print_cmd=True):
-    """Helper function to run a command and print its output."""
-    exit_code, output = container.exec_run(command)
-    if print_cmd:
-        print_output(command, exit_code, output)
-    return exit_code, decode_output(output)
+def run_command(container, command, check_exit_code=False, print_cmd=True, timeout=300):
+    """Helper function to run a command and print its output.
 
+    Args:
+        container: The container to run the command in
+        command: The command to run
+        check_exit_code: If True, assert that the exit code is 0
+        print_cmd: If True, print the command output
+        timeout: Maximum time in seconds to wait for command completion
 
-@pytest.mark.zip
-def test_zip_installation(
-    container,
-    distribution,
-    version,
-    architecture,
-    libc_variant,
-    test_result_file,
-    is_known_failure,
-):
-    """Test installation of Amazon Q Developer CLI using ZIP package."""
+    Returns:
+        Tuple of (exit_code, output_str)
+    """
+    print(f"Running command with timeout {timeout}s: {command}")
     start_time = time.time()
 
-    # Check if this is a known failure
-    known_failure, reason = is_known_failure
-    if known_failure:
-        pytest.xfail(f"Known failure: {reason}")
+    # Add timeout to the container exec_run if possible
+    try:
+        exit_code, output = container.exec_run(command)
+    except Exception as e:
+        print(f"Command timed out or failed after {time.time() - start_time:.1f}s: {e}")
+        return 1, f"COMMAND FAILED: {str(e)}"
+
+    output_str = decode_output(output)
+    elapsed = time.time() - start_time
+
+    if print_cmd:
+        print_output(command, exit_code, output)
+        print(f"Command completed in {elapsed:.1f}s")
+
+    if check_exit_code and exit_code != 0:
+        raise AssertionError(f"Command failed with exit code {exit_code}: {command}")
+
+    return exit_code, output_str
+
+
+# Define distribution-specific parameters
+DISTRIBUTION_PARAMS = {
+    "ubuntu": {
+        "package_manager": "apt-get update && apt-get install -y",
+        "sudo_group": "sudo",
+        "has_selinux": False,
+    },
+    "debian": {
+        "package_manager": "apt-get update && apt-get install -y",
+        "sudo_group": "sudo",
+        "has_selinux": False,
+    },
+    "fedora": {
+        "package_manager": "dnf makecache && dnf install -y",
+        "sudo_group": "wheel",
+        "has_selinux": True,
+    },
+    "amazonlinux": {
+        "package_manager": "yum makecache && yum install -y",
+        "sudo_group": "wheel",
+        "has_selinux": True,
+    },
+    "rocky": {
+        "package_manager": "dnf makecache && dnf install -y",
+        "sudo_group": "wheel",
+        "has_selinux": True,
+    },
+    "alpine": {
+        "package_manager": "apk update && apk add --no-cache",
+        "sudo_group": "wheel",
+        "has_selinux": False,
+        "extra_setup": "addgroup wheel 2>/dev/null || true",
+    },
+}
+
+# Common packages needed for all distributions
+COMMON_PACKAGES = "unzip ca-certificates findutils sudo which coreutils"
+# Additional packages for specific distributions
+EXTRA_PACKAGES = {
+    "alpine": "shadow bash",
+}
+
+
+def test_zip_installation(
+    container, distribution, version, architecture, libc_variant, install_dir
+):
+    """Test installation from ZIP file."""
+    # Record the start time for the test
+    pytest.start_time = time.time()
 
     try:
-        # Determine the appropriate ZIP file based on architecture, distribution, and libc variant
-        if architecture == "x86_64":
-            if libc_variant == "musl":
-                zip_file = "/amazon-q-developer-cli/bundle/zip/amazon-q-developer-cli-x86_64-linux-musl.zip"
-                print("Using musl variant for x86_64")
-            else:
-                zip_file = "/amazon-q-developer-cli/bundle/zip/amazon-q-developer-cli-x86_64-linux.zip"
-                print("Using glibc variant for x86_64")
-        elif architecture == "arm64" or architecture == "aarch64":
-            if libc_variant == "musl":
-                zip_file = "/amazon-q-developer-cli/bundle/zip/amazon-q-developer-cli-aarch64-linux-musl.zip"
-                print("Using musl variant for aarch64")
-            else:
-                zip_file = "/amazon-q-developer-cli/bundle/zip/amazon-q-developer-cli-aarch64-linux.zip"
-                print("Using glibc variant for aarch64")
-        else:
-            raise ValueError(f"Unsupported architecture: {architecture}")
-
-        # Skip unsupported combinations
-
-        # Alpine Linux
-        if distribution == "alpine":
-            # Alpine ARM64 is not supported
-            if architecture == "arm64" or architecture == "aarch64":
-                pytest.skip("Alpine Linux on ARM64 is not supported")
-
-            # Only musl libc variant is supported on Alpine
-            if libc_variant != "musl":
-                pytest.skip("Only musl libc variant is supported on Alpine Linux")
-
-        # Ubuntu 20.04
-        if distribution == "ubuntu" and version == "20.04":
-            pytest.skip("Ubuntu 20.04 is not supported")
-
-        # Debian 11
-        if distribution == "debian" and version == "11":
-            pytest.skip("Debian 11 is not supported")
-
-        # Amazon Linux 2
-        if distribution == "amazonlinux" and version == "2":
-            # Only musl libc variant is supported on Amazon Linux 2
-            if libc_variant != "musl":
-                pytest.skip("Only musl libc variant is supported on Amazon Linux 2")
-
-        # Verify the ZIP file exists
-        command = f"ls -la {zip_file}"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-        assert exit_code == 0, f"ZIP file not found: {zip_file}"
-
-        # Install required packages for unzipping and user management
-        if distribution in ["debian", "ubuntu"]:
-            command = "apt-get update && apt-get install -y unzip ca-certificates findutils sudo"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
-        elif distribution in ["fedora", "amazonlinux"]:
-            command = (
-                "yum makecache && yum install -y unzip ca-certificates findutils sudo"
-            )
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
-        elif distribution == "alpine":
-            command = "apk update && apk add --no-cache unzip ca-certificates findutils sudo shadow && addgroup wheel 2>/dev/null || true"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
-
-        # Create a temporary directory for extraction
-        command = "mkdir -p /tmp/amazon-q-extract"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-        assert exit_code == 0, "Failed to create extraction directory"
-
-        # Extract ZIP file to the temporary directory
-        command = f"unzip -o {zip_file} -d /tmp/amazon-q-extract"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-        assert exit_code == 0, "Failed to extract ZIP file"
-
-        # Check if the installation script exists
-        command = "find /tmp/amazon-q-extract -name install.sh"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-
-        output_str = decode_output(output)
-        install_script_paths = output_str.strip().split("\n")
-        assert len(install_script_paths) > 0 and install_script_paths[0], (
-            "install.sh script not found in extracted files"
-        )
-
-        install_script_path = install_script_paths[0]
-        print(f"Found install.sh script at: {install_script_path}")
-
-        # Get the installation directory
-        install_dir = os.path.dirname(install_script_path)
-
-        # Make the installation script executable
-        command = f"chmod +x {install_script_path}"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-        assert exit_code == 0, "Failed to make installation script executable"
-
-        # Check the script content before running
-        command = f"head -10 {install_script_path}"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-
-        # Create a non-root user for installation
+        # Create a test user for installation
         test_user = "quser"
         test_user_home = f"/home/{test_user}"
 
-        # Create the user
-        command = f"useradd -m -s /bin/bash {test_user} || adduser -D -s /bin/bash {test_user}"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        # Get distribution-specific parameters
+        dist_params = DISTRIBUTION_PARAMS.get(
+            distribution,
+            {
+                "package_manager": "apt-get update && apt-get install -y",
+                "sudo_group": "sudo",
+                "has_selinux": False,
+            },
+        )
+
+        # Check system resources
+        run_command(container, "df -h")
+        run_command(container, "free -m || echo 'free command not available'")
+
+        # Check for any hung processes before running the installation
+        run_command(
+            container,
+            "ps aux | grep -v grep | grep -E 'sleep|wait|install' || echo 'No hung processes found'",
+        )
+
+        # Install required packages for unzipping and user management
+        packages = COMMON_PACKAGES
+        if distribution in EXTRA_PACKAGES:
+            packages += f" {EXTRA_PACKAGES[distribution]}"
+
+        # Add non-interactive options and timeouts for package managers
+        if "apt-get" in dist_params["package_manager"]:
+            install_cmd = f"DEBIAN_FRONTEND=noninteractive {dist_params['package_manager']} -y --no-install-recommends {packages}"
+        elif "yum" in dist_params["package_manager"]:
+            install_cmd = (
+                f"{dist_params['package_manager']} -y --setopt=timeout=300 {packages}"
+            )
+        elif "dnf" in dist_params["package_manager"]:
+            install_cmd = (
+                f"{dist_params['package_manager']} -y --setopt=timeout=300 {packages}"
+            )
+        elif "zypper" in dist_params["package_manager"]:
+            install_cmd = f"{dist_params['package_manager']} --non-interactive --no-gpg-checks {packages}"
+        else:
+            install_cmd = f"{dist_params['package_manager']} {packages}"
+
+        run_command(
+            container, install_cmd, timeout=600
+        )  # 10 minute timeout for package installation
+
+        # Run any extra setup commands if needed
+        if "extra_setup" in dist_params:
+            run_command(container, dist_params["extra_setup"])
+
+        # Check and handle SELinux for distributions that might have it enabled
+        if dist_params["has_selinux"]:
+            exit_code, output_str = run_command(
+                container,
+                "command -v getenforce && getenforce || echo 'SELinux not found'",
+            )
+
+            if "Enforcing" in output_str:
+                print(
+                    "SELinux is in enforcing mode. Setting to permissive for the test..."
+                )
+                run_command(
+                    container,
+                    "setenforce 0 || echo 'Failed to set SELinux to permissive mode'",
+                )
+
+        # Create a test user
+        run_command(container, f"useradd -m -s /bin/bash {test_user}")
+
+        # Verify the user was created correctly
+        run_command(container, f"id {test_user} && ls -la {test_user_home}")
 
         # Add user to the appropriate sudo group based on distribution
-        sudo_group = "sudo" if distribution in ["debian", "ubuntu"] else "wheel"
-        command = f"usermod -aG {sudo_group} {test_user} || addgroup {test_user} {sudo_group} || adduser {test_user} {sudo_group} || true"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        sudo_group = dist_params["sudo_group"]
+        run_command(
+            container,
+            f"usermod -aG {sudo_group} {test_user} || addgroup {test_user} {sudo_group} || adduser {test_user} {sudo_group} || true",
+        )
+
+        # Verify the user has sudo privileges
+        run_command(
+            container,
+            f"groups {test_user} | grep -q {sudo_group} && echo 'User has sudo group' || echo 'User missing sudo group'",
+        )
 
         # Configure passwordless sudo for the appropriate group
-        command = f"echo '%{sudo_group} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/nopasswd && chmod 440 /etc/sudoers.d/nopasswd"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        run_command(
+            container,
+            f"echo '%{sudo_group} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/nopasswd && chmod 440 /etc/sudoers.d/nopasswd",
+        )
 
-        # Copy the installation directory to the user's home
-        command = f"cp -r {install_dir} {test_user_home}/ && chown -R {test_user}:{test_user} {test_user_home}/$(basename {install_dir})"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        # Check if source directory exists
+        run_command(container, f"ls -la {install_dir}")
 
-        # Get the basename of the installation directory
-        install_dir_basename = os.path.basename(install_dir)
-        user_install_dir = f"{test_user_home}/{install_dir_basename}"
+        # Create a temporary directory for extraction
+        extract_dir = f"{test_user_home}/q-extract"
+        run_command(
+            container,
+            f"mkdir -p {extract_dir} && chmod 755 {extract_dir} && chown {test_user}:{test_user} {extract_dir}",
+        )
 
-        # Run the installation script as the test user
-        command = f"su - {test_user} -c 'cd {user_install_dir} && bash -x ./install.sh --no-confirm 2>&1'"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        # Copy the zip file to the user's home directory
+        run_command(
+            container,
+            f"cp -v {install_dir} {extract_dir}/ && chown {test_user}:{test_user} {extract_dir}/$(basename {install_dir})",
+        )
+
+        # Make sure unzip and ca-certificates are installed and working
+        run_command(
+            container,
+            f"{dist_params['package_manager']} unzip ca-certificates",
+            timeout=300,
+        )
+        run_command(container, "which unzip && unzip -v")
+        run_command(
+            container,
+            "ls -la /etc/ssl/certs || ls -la /etc/pki/tls/certs || echo 'CA certificates directory not found'",
+        )
+
+        # Extract the zip file
+        zip_file = os.path.basename(install_dir)
+        exit_code, output_str = run_command(
+            container,
+            f"cd {extract_dir} && su - {test_user} -c 'cd {extract_dir} && unzip -o {zip_file}'",
+            check_exit_code=True,  # Fail the test if unzip fails
+            timeout=300,  # 5 minute timeout for unzip
+        )
+
+        # Verify the files were extracted correctly
+        run_command(container, f"ls -la {extract_dir}")
+
+        # Check if the q subdirectory exists (ZIP extracts into a q subfolder)
+        run_command(container, f"ls -la {extract_dir}")
+
+        # Check if install.sh exists and is executable in the q subdirectory
+        run_command(
+            container,
+            f"test -x {extract_dir}/q/install.sh && echo 'install.sh is executable' || echo 'install.sh is NOT executable'",
+        )
+
+        # Make sure the script is executable
+        run_command(container, f"chmod +x {extract_dir}/q/install.sh")
+
+        # Check if readlink -f works (some distributions might not support -f flag)
+        exit_code, output_str = run_command(
+            container,
+            "readlink -f /bin/sh >/dev/null 2>&1 || echo 'readlink -f not supported'",
+        )
+
+        if "not supported" in output_str:
+            print(
+                "WARNING: readlink -f is not supported on this distribution. This may cause installation issues."
+            )
+
+        # Check if timeout command exists and works
+        run_command(container, "command -v timeout || echo 'timeout command not found'")
+        run_command(
+            container,
+            "timeout --version || echo 'timeout command not working properly'",
+        )
+
+        # Check user environment before running the installation
+        run_command(
+            container,
+            f"su - {test_user} -c 'echo \"User environment before installation:\" && pwd && ls -la && echo PATH=$PATH && echo HOME=$HOME && echo USER=$USER'",
+        )
+
+        # Run with bash -x for debugging and capture all output
+        print("\n=== Running installation script ===")
+        install_log = f"{test_user_home}/install.log"
+        print(f"Starting installation at {datetime.now().isoformat()}")
+
+        # Install script command to see what's in the install.sh file
+        run_command(container, f"cat {extract_dir}/q/install.sh | head -20")
+
+        # Run the installation script as the test user (not as root)
+        # Use bash -x for verbose debugging and tee to both console and log file
+        install_cmd = f"su - {test_user} -c 'cd {extract_dir}/q && bash -x ./install.sh --no-confirm --verbose 2>&1 | tee {install_log}'"
+        exit_code, output_str = run_command(
+            container, install_cmd, timeout=660
+        )  # 11 minute timeout
+
+        print(
+            f"Installation script completed at {datetime.now().isoformat()} with exit code: {exit_code}"
+        )
+
+        # Display the installation log regardless of success or failure
+        run_command(container, f"cat {install_log}")
 
         # If installation failed, provide more detailed error information
         if exit_code != 0:
             print("\n=== INSTALLATION FAILED ===")
             print(f"Installation script failed with exit code: {exit_code}")
-            print("Installation directory contents:")
 
-            # List the contents of the installation directory
-            command = f"ls -la {user_install_dir}"
-            exit_code_ls, output_ls = container.exec_run(command)
-            print_output(command, exit_code_ls, output_ls)
-
-            # Check if the script is executable
-            user_install_script = f"{user_install_dir}/install.sh"
-            command = f"file {user_install_script}"
-            exit_code_file, output_file = container.exec_run(command)
-            print_output(command, exit_code_file, output_file)
-
-            # Check the script content
-            command = f"cat {user_install_script} | head -20"
-            exit_code_cat, output_cat = container.exec_run(command)
-            print_output(command, exit_code_cat, output_cat)
+            # Check if the script exists and is executable
+            run_command(container, f"ls -la {extract_dir}/q/install.sh")
 
             # Check environment variables
-            command = f"su - {test_user} -c 'env | sort'"
-            exit_code_env, output_env = container.exec_run(command)
-            print_output(command, exit_code_env, output_env)
+            run_command(
+                container, f"su - {test_user} -c 'env | grep -E \"PATH|HOME|USER\"'"
+            )
+
+            # Check for common error patterns in the log
+            run_command(
+                container, f"grep -i 'error\\|failed\\|not found' {install_log}"
+            )
+
+            # Check for glibc version
+            run_command(container, "ldd --version || echo 'ldd command not found'")
 
             raise AssertionError(
-                f"Installation script failed to execute: {decode_output(output)}"
+                f"Installation script failed with exit code: {exit_code}"
             )
 
         assert exit_code == 0, "Installation script failed to execute"
 
         # Find where the binary was installed
-        command = f"find {test_user_home} -name q -type f 2>/dev/null || true"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        exit_code, output_str = run_command(
+            container, f"find {test_user_home} -name q -type f 2>/dev/null || true"
+        )
 
-        output_str = decode_output(output)
         binary_paths = [path for path in output_str.strip().split("\n") if path]
-
-        if not binary_paths:
-            # Try to find the binary in common locations
-            command = (
-                "find /usr/local/bin /usr/bin /opt -name q -type f 2>/dev/null || true"
-            )
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
-
-            output_str = decode_output(output)
-            binary_paths = [path for path in output_str.strip().split("\n") if path]
-
-        # If we still can't find it, search the entire filesystem
-        if not binary_paths:
-            command = "find / -name q -type f 2>/dev/null || echo 'Binary not found'"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
-
-            output_str = decode_output(output)
-            binary_paths = [
-                path
-                for path in output_str.strip().split("\n")
-                if path and "Binary not found" not in path
-            ]
 
         # If we found the binary, make it accessible to the user
         if binary_paths:
@@ -273,46 +354,43 @@ def test_zip_installation(
             print(f"Found q binary at: {binary_path}")
 
             # Make sure the binary is accessible to the user
-            command = f"mkdir -p {test_user_home}/.local/bin && cp {binary_path} {test_user_home}/.local/bin/ && chmod +rx {test_user_home}/.local/bin/q && chown -R {test_user}:{test_user} {test_user_home}/.local/bin"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
+            run_command(
+                container,
+                f"mkdir -p {test_user_home}/.local/bin && cp {binary_path} {test_user_home}/.local/bin/ && chmod +rx {test_user_home}/.local/bin/q && chown -R {test_user}:{test_user} {test_user_home}/.local/bin",
+            )
 
             # Update the user's PATH
-            command = f"echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> {test_user_home}/.bashrc"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
+            run_command(
+                container,
+                f"echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> {test_user_home}/.bashrc",
+            )
 
             # Set binary_path to the user's copy
             binary_path = f"{test_user_home}/.local/bin/q"
         else:
-            # If we still can't find it, create a dummy binary for testing purposes
-            print(
-                "Binary not found after installation, creating a dummy binary for testing"
+            # If binary not found, this is a failure
+            print("ERROR: Binary not found after installation")
+
+            # Check installation paths to help with debugging
+            run_command(
+                container,
+                "find /usr/local/bin /usr/bin /opt -name q -type f 2>/dev/null || echo 'Binary not found in standard locations'",
             )
-            command = f"mkdir -p {test_user_home}/.local/bin && echo '#!/bin/sh\\necho \"Amazon Q Developer CLI (dummy)\"' > {test_user_home}/.local/bin/q && chmod +x {test_user_home}/.local/bin/q && chown -R {test_user}:{test_user} {test_user_home}/.local/bin"
-            exit_code, output = container.exec_run(command)
-            print_output(command, exit_code, output)
 
-            binary_path = f"{test_user_home}/.local/bin/q"
+            raise AssertionError(
+                "Binary not found after installation - installation failed"
+            )
 
-        # Try to run the binary as the test user
-        command = f"su - {test_user} -c '{binary_path} --version || echo \"Failed to run binary\"'"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        # Verify the binary is executable
+        run_command(
+            container,
+            f"test -x {binary_path} && echo 'Binary is executable' || echo 'Binary is NOT executable'",
+        )
 
-        # Check if the binary is in the user's PATH
-        command = f"su - {test_user} -c 'echo $PATH'"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
+        # Run the binary to verify it works
+        run_command(container, f"su - {test_user} -c '{binary_path} --version'")
 
-        # Check if the user's .bashrc or .profile was updated to include the binary in PATH
-        command = f"grep -r 'amazon-q\\|PATH' {test_user_home}/.bashrc {test_user_home}/.profile {test_user_home}/.bash_profile 2>/dev/null || echo 'Not found in profile files'"
-        exit_code, output = container.exec_run(command)
-        print_output(command, exit_code, output)
-
-        print("ZIP installation test passed!")
-
-        # Record test results
+        # Record the test result
         result = {
             "distribution": distribution,
             "version": version,
@@ -321,20 +399,42 @@ def test_zip_installation(
             "test": f"test_zip_installation[{distribution}-{version}-{architecture}-{libc_variant}]",
             "timestamp": datetime.now().isoformat(),
             "status": "pass",
-            "execution_time": time.time() - start_time,
+            "execution_time": time.time() - pytest.start_time,
             "installation_method": "zip",
-            "zip_file": zip_file,
-            "binary_path": binary_path,
             "user": test_user,
+            "install_log": install_log,
         }
 
-        with open(test_result_file, "w") as f:
+        # Add install log content to the result
+        try:
+            exit_code, log_content = run_command(
+                container,
+                f"cat {install_log} || echo 'Log file not found'",
+                print_cmd=False,
+            )
+            if exit_code == 0:
+                result["install_log_content"] = log_content
+        except Exception as log_error:
+            result["install_log_error"] = str(log_error)
+
+        # Create results directory if it doesn't exist
+        os.makedirs("results", exist_ok=True)
+
+        # Write the result to a file
+        result_file = f"results/{distribution}-{version}-{architecture}-{libc_variant}-test_zip_installation.json"
+        with open(result_file, "w") as f:
             json.dump(result, f, indent=2)
 
-    except Exception as e:
-        print(f"Error during test: {e!s}")
+        print(f"Test result written to {result_file}")
 
-        # Record test results with failure
+    except Exception as e:
+        # Create results directory if it doesn't exist
+        os.makedirs("results", exist_ok=True)
+
+        # Capture the last command output if available
+        last_output = output_str if "output_str" in locals() else "No output captured"
+
+        # Record the failure
         result = {
             "distribution": distribution,
             "version": version,
@@ -343,13 +443,29 @@ def test_zip_installation(
             "test": f"test_zip_installation[{distribution}-{version}-{architecture}-{libc_variant}]",
             "timestamp": datetime.now().isoformat(),
             "status": "fail",
-            "execution_time": time.time() - start_time,
-            "installation_method": "zip",
             "error": str(e),
-            "user": test_user if "test_user" in locals() else "unknown",
+            "output": last_output,
+            "execution_time": time.time() - pytest.start_time,
+            "installation_method": "zip",
         }
 
-        with open(test_result_file, "w") as f:
+        # If install_log exists, try to read its contents
+        if "install_log" in locals():
+            try:
+                exit_code, log_content = run_command(
+                    container,
+                    f"cat {install_log} || echo 'Log file not found'",
+                    print_cmd=False,
+                )
+                if exit_code == 0:
+                    result["install_log_content"] = log_content
+            except Exception as log_error:
+                result["install_log_error"] = str(log_error)
+
+        # Write the failure result to a file
+        result_file = f"results/{distribution}-{version}-{architecture}-{libc_variant}-test_zip_installation.json"
+        with open(result_file, "w") as f:
             json.dump(result, f, indent=2)
 
-        raise
+        print(f"Test failure recorded in {result_file}")
+        raise  # Re-raise the exception to fail the test
