@@ -97,7 +97,7 @@ def main():
 
     # Read the summary data
     try:
-        with open(args.input, "r") as f:
+        with open(args.input) as f:
             summary_data = json.load(f)
     except FileNotFoundError:
         print(f"Error: File {args.input} not found", file=sys.stderr)

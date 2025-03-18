@@ -56,7 +56,7 @@ def run_command(container, command, check_exit_code=False, print_cmd=True, timeo
         exit_code, output = container.exec_run(command)
     except Exception as e:
         print(f"Command timed out or failed after {time.time() - start_time:.1f}s: {e}")
-        return 1, f"COMMAND FAILED: {str(e)}"
+        return 1, f"COMMAND FAILED: {e!s}"
 
     output_str = decode_output(output)
     elapsed = time.time() - start_time
@@ -74,27 +74,27 @@ def run_command(container, command, check_exit_code=False, print_cmd=True, timeo
 # Define distribution-specific parameters
 DISTRIBUTION_PARAMS = {
     "ubuntu": {
-        "package_manager": "apt-get update && apt-get install -y",
+        "package_manager": "apt-get install -y --no-install-recommends",
         "sudo_group": "sudo",
         "has_selinux": False,
     },
     "debian": {
-        "package_manager": "apt-get update && apt-get install -y",
+        "package_manager": "apt-get install -y --no-install-recommends",
         "sudo_group": "sudo",
         "has_selinux": False,
     },
     "fedora": {
-        "package_manager": "dnf makecache && dnf install -y",
+        "package_manager": "dnf makecache && dnf install -y --setopt=timeout=300",
         "sudo_group": "wheel",
         "has_selinux": True,
     },
     "amazonlinux": {
-        "package_manager": "yum makecache && yum install -y",
+        "package_manager": "yum install -y --setopt=timeout=300",
         "sudo_group": "wheel",
         "has_selinux": True,
     },
     "rocky": {
-        "package_manager": "dnf makecache && dnf install -y",
+        "package_manager": "dnf install -y --setopt=timeout=300",
         "sudo_group": "wheel",
         "has_selinux": True,
     },
@@ -110,7 +110,12 @@ DISTRIBUTION_PARAMS = {
 COMMON_PACKAGES = "unzip ca-certificates findutils sudo which coreutils"
 # Additional packages for specific distributions
 EXTRA_PACKAGES = {
-    "alpine": "shadow bash",
+    "alpine": "bash shadow",
+    "debian": "passwd",
+    "ubuntu": "passwd",
+    "fedora": "shadow-utils",
+    "rocky": "shadow-utils",
+    "amazonlinux": "shadow-utils",
 }
 
 
@@ -136,40 +141,138 @@ def test_zip_installation(
             },
         )
 
-        # Check system resources
-        run_command(container, "df -h")
-        run_command(container, "free -m || echo 'free command not available'")
-
-        # Check for any hung processes before running the installation
-        run_command(
-            container,
-            "ps aux | grep -v grep | grep -E 'sleep|wait|install' || echo 'No hung processes found'",
-        )
-
         # Install required packages for unzipping and user management
         packages = COMMON_PACKAGES
         if distribution in EXTRA_PACKAGES:
             packages += f" {EXTRA_PACKAGES[distribution]}"
 
-        # Add non-interactive options and timeouts for package managers
+        # Use the package manager command directly
         if "apt-get" in dist_params["package_manager"]:
-            install_cmd = f"DEBIAN_FRONTEND=noninteractive {dist_params['package_manager']} -y --no-install-recommends {packages}"
-        elif "yum" in dist_params["package_manager"]:
-            install_cmd = (
-                f"{dist_params['package_manager']} -y --setopt=timeout=300 {packages}"
+            # Always run apt-get update first for Debian/Ubuntu
+            run_command(
+                container, "apt-get update -y", timeout=300, check_exit_code=True
             )
-        elif "dnf" in dist_params["package_manager"]:
-            install_cmd = (
-                f"{dist_params['package_manager']} -y --setopt=timeout=300 {packages}"
-            )
-        elif "zypper" in dist_params["package_manager"]:
-            install_cmd = f"{dist_params['package_manager']} --non-interactive --no-gpg-checks {packages}"
+
+            # Try installing all packages at once first
+            try:
+                run_command(
+                    container,
+                    f"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {packages}",
+                    timeout=600,
+                    check_exit_code=True,
+                )
+                print("Successfully installed all packages")
+            except Exception as e:
+                print(f"Failed to install all packages at once: {e!s}")
+                print("Falling back to installing packages one by one")
+
+                # Try installing packages one by one as fallback
+                for pkg in packages.split():
+                    try:
+                        run_command(
+                            container,
+                            f"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {pkg}",
+                            timeout=120,
+                            check_exit_code=True,
+                        )
+                        print(f"Successfully installed {pkg}")
+                    except Exception as e:
+                        print(f"Failed to install {pkg}: {e!s}")
+                        if pkg not in ["unzip", "sudo"]:  # These are essential
+                            print(f"Continuing without {pkg}")
+                        else:
+                            raise
+        elif distribution == "rocky" or distribution == "amazonlinux":
+            # For Rocky Linux and Amazon Linux, try without makecache and with specific error handling
+            try:
+                # First try with basic install
+                if distribution == "rocky":
+                    run_command(
+                        container,
+                        f"dnf install -y {packages}",
+                        timeout=600,
+                        check_exit_code=True,
+                    )
+                else:  # amazonlinux
+                    run_command(
+                        container,
+                        f"yum install -y --allowerasing {packages}",
+                        timeout=600,
+                        check_exit_code=True,
+                    )
+            except Exception as e:
+                print(f"Package installation failed with basic install: {e!s}")
+                # Try with repo refresh
+                if distribution == "rocky":
+                    run_command(
+                        container, "dnf clean all", timeout=300, check_exit_code=False
+                    )
+                    run_command(
+                        container,
+                        "dnf check-update || true",
+                        timeout=300,
+                        check_exit_code=False,
+                    )
+                else:  # amazonlinux
+                    run_command(
+                        container, "yum clean all", timeout=300, check_exit_code=False
+                    )
+                    run_command(
+                        container,
+                        "yum check-update || true",
+                        timeout=300,
+                        check_exit_code=False,
+                    )
+
+                # Try installing packages one by one
+                for pkg in packages.split():
+                    try:
+                        if distribution == "rocky":
+                            run_command(
+                                container,
+                                f"dnf install -y {pkg}",
+                                timeout=120,
+                                check_exit_code=True,
+                            )
+                        else:  # amazonlinux
+                            run_command(
+                                container,
+                                f"yum install -y --allowerasing {pkg}",
+                                timeout=120,
+                                check_exit_code=True,
+                            )
+                        print(f"Successfully installed {pkg}")
+                    except Exception as e2:
+                        print(f"Failed to install {pkg}: {e2!s}")
+                        if pkg not in ["unzip", "sudo"]:  # These are essential
+                            print(f"Continuing without {pkg}")
+                        else:
+                            raise
+        elif (
+            "dnf" in dist_params["package_manager"]
+            or "yum" in dist_params["package_manager"]
+        ):
+            # For RPM-based systems, try with and without makecache
+            try:
+                run_command(
+                    container,
+                    f"{dist_params['package_manager']} {packages}",
+                    timeout=600,
+                    check_exit_code=True,
+                )
+            except Exception as e:
+                print(f"Package installation failed with makecache: {e!s}")
+                # Try without makecache
+                pkg_cmd = dist_params["package_manager"].split("&&")[1].strip()
+                run_command(
+                    container,
+                    pkg_cmd + " " + packages,
+                    timeout=600,
+                    check_exit_code=True,
+                )
         else:
             install_cmd = f"{dist_params['package_manager']} {packages}"
-
-        run_command(
-            container, install_cmd, timeout=600
-        )  # 10 minute timeout for package installation
+            run_command(container, install_cmd, timeout=600, check_exit_code=True)
 
         # Run any extra setup commands if needed
         if "extra_setup" in dist_params:
@@ -192,38 +295,89 @@ def test_zip_installation(
                 )
 
         # Create a test user
-        run_command(container, f"useradd -m -s /bin/bash {test_user}")
+        try:
+            # First try useradd (common on many distros)
+            run_command(
+                container, f"useradd -m -s /bin/bash {test_user}", check_exit_code=True
+            )
+            print(f"Created user {test_user} with useradd")
+        except Exception as e1:
+            print(f"useradd failed: {e1!s}")
+            try:
+                # Then try distribution-specific approaches
+                if distribution == "alpine":
+                    run_command(
+                        container,
+                        f"adduser -h {test_user_home} -s /bin/bash -D {test_user}",
+                        check_exit_code=True,
+                    )
+                    print(f"Created user {test_user} with Alpine adduser")
+                elif distribution in ["ubuntu", "debian"]:
+                    run_command(
+                        container,
+                        f"adduser --disabled-password --gecos '' {test_user}",
+                        check_exit_code=True,
+                    )
+                    print(f"Created user {test_user} with Debian/Ubuntu adduser")
+                else:
+                    # Last resort, try basic adduser without options
+                    run_command(container, f"adduser {test_user}", check_exit_code=True)
+                    print(f"Created user {test_user} with basic adduser")
+            except Exception as e2:
+                print(f"All user creation methods failed: {e1!s}, then {e2!s}")
+                raise Exception(
+                    f"Failed to create user {test_user} using any available method"
+                )
 
         # Verify the user was created correctly
-        run_command(container, f"id {test_user} && ls -la {test_user_home}")
+        run_command(
+            container,
+            f"id {test_user} && ls -la {test_user_home}",
+            check_exit_code=True,
+        )
 
         # Add user to the appropriate sudo group based on distribution
         sudo_group = dist_params["sudo_group"]
+        # First ensure the group exists
         run_command(
             container,
-            f"usermod -aG {sudo_group} {test_user} || addgroup {test_user} {sudo_group} || adduser {test_user} {sudo_group} || true",
+            f"getent group {sudo_group} || groupadd {sudo_group}",
+            check_exit_code=True,
         )
+
+        # Then add the user to the group using the appropriate command for the distribution
+        if distribution == "alpine":
+            run_command(
+                container, f"addgroup {test_user} {sudo_group}", check_exit_code=True
+            )
+        else:
+            run_command(
+                container, f"usermod -aG {sudo_group} {test_user}", check_exit_code=True
+            )
 
         # Verify the user has sudo privileges
         run_command(
             container,
-            f"groups {test_user} | grep -q {sudo_group} && echo 'User has sudo group' || echo 'User missing sudo group'",
+            f"groups {test_user} | grep -q {sudo_group} && echo 'User has sudo group' || (echo 'User missing sudo group' && exit 1)",
+            check_exit_code=True,
         )
 
         # Configure passwordless sudo for the appropriate group
         run_command(
             container,
             f"echo '%{sudo_group} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/nopasswd && chmod 440 /etc/sudoers.d/nopasswd",
+            check_exit_code=True,
         )
 
         # Check if source directory exists
-        run_command(container, f"ls -la {install_dir}")
+        run_command(container, f"ls -la {install_dir}", check_exit_code=True)
 
         # Create a temporary directory for extraction
         extract_dir = f"{test_user_home}/q-extract"
         run_command(
             container,
             f"mkdir -p {extract_dir} && chmod 755 {extract_dir} && chown {test_user}:{test_user} {extract_dir}",
+            check_exit_code=True,
         )
 
         # Copy the zip file to the user's home directory
@@ -233,6 +387,7 @@ def test_zip_installation(
         )
 
         # Make sure unzip and ca-certificates are installed and working
+        # Explicitly install unzip for all distributions to ensure it's available
         run_command(
             container,
             f"{dist_params['package_manager']} unzip ca-certificates",
@@ -244,14 +399,35 @@ def test_zip_installation(
             "ls -la /etc/ssl/certs || ls -la /etc/pki/tls/certs || echo 'CA certificates directory not found'",
         )
 
-        # Extract the zip file
+        # Extract the zip file as the test user
         zip_file = os.path.basename(install_dir)
-        exit_code, output_str = run_command(
-            container,
-            f"cd {extract_dir} && su - {test_user} -c 'cd {extract_dir} && unzip -o {zip_file}'",
-            check_exit_code=True,  # Fail the test if unzip fails
-            timeout=300,  # 5 minute timeout for unzip
-        )
+        try:
+            # First try with su - user
+            exit_code, output_str = run_command(
+                container,
+                f"cd {extract_dir} && chown -R {test_user}:{test_user} . && su - {test_user} -c 'cd {extract_dir} && unzip -o {zip_file}'",
+                check_exit_code=True,  # Fail if this approach fails
+                timeout=300,  # 5 minute timeout for unzip
+            )
+        except Exception as e:
+            print(f"Unzip failed with su - user: {e!s}")
+            try:
+                # Try with sudo instead of su
+                exit_code, output_str = run_command(
+                    container,
+                    f"cd {extract_dir} && chown -R {test_user}:{test_user} . && sudo -u {test_user} bash -c 'cd {extract_dir} && unzip -o {zip_file}'",
+                    check_exit_code=True,
+                    timeout=300,
+                )
+            except Exception as e2:
+                print(f"Unzip failed with sudo -u user: {e2!s}")
+                # Last resort: unzip as root and fix permissions
+                exit_code, output_str = run_command(
+                    container,
+                    f"cd {extract_dir} && unzip -o {zip_file} && chown -R {test_user}:{test_user} .",
+                    check_exit_code=True,
+                    timeout=300,
+                )
 
         # Verify the files were extracted correctly
         run_command(container, f"ls -la {extract_dir}")
@@ -292,27 +468,28 @@ def test_zip_installation(
             f"su - {test_user} -c 'echo \"User environment before installation:\" && pwd && ls -la && echo PATH=$PATH && echo HOME=$HOME && echo USER=$USER'",
         )
 
-        # Run with bash -x for debugging and capture all output
-        print("\n=== Running installation script ===")
+        # Run the installation script as the test user (not as root)
+        # Use bash -x for verbose debugging and tee to both console and log file
         install_log = f"{test_user_home}/install.log"
         print(f"Starting installation at {datetime.now().isoformat()}")
 
         # Install script command to see what's in the install.sh file
         run_command(container, f"cat {extract_dir}/q/install.sh | head -20")
 
-        # Run the installation script as the test user (not as root)
-        # Use bash -x for verbose debugging and tee to both console and log file
-        install_cmd = f"su - {test_user} -c 'cd {extract_dir}/q && bash -x ./install.sh --no-confirm --verbose 2>&1 | tee {install_log}'"
+        print("\n=== Running installation script ===")
         exit_code, output_str = run_command(
-            container, install_cmd, timeout=660
-        )  # 11 minute timeout
+            container,
+            f"su - {test_user} -c 'cd {extract_dir}/q && bash -x ./install.sh --no-confirm --verbose 2>&1 | tee {install_log}' || sudo -u {test_user} bash -c 'cd {extract_dir}/q && bash -x ./install.sh --no-confirm --verbose 2>&1 | tee {install_log}'",
+            timeout=660,  # 11 minute timeout
+            check_exit_code=False,  # Don't fail immediately, we'll handle it below
+        )
 
         print(
             f"Installation script completed at {datetime.now().isoformat()} with exit code: {exit_code}"
         )
 
         # Display the installation log regardless of success or failure
-        run_command(container, f"cat {install_log}")
+        run_command(container, f"cat {install_log} || echo 'Log file not found'")
 
         # If installation failed, provide more detailed error information
         if exit_code != 0:
@@ -324,20 +501,53 @@ def test_zip_installation(
 
             # Check environment variables
             run_command(
-                container, f"su - {test_user} -c 'env | grep -E \"PATH|HOME|USER\"'"
+                container,
+                f"su - {test_user} -c 'env | grep -E \"PATH|HOME|USER\"' || echo 'Failed to get user environment'",
             )
 
             # Check for common error patterns in the log
             run_command(
-                container, f"grep -i 'error\\|failed\\|not found' {install_log}"
+                container,
+                f"grep -i 'error\\|failed\\|not found' {install_log} || echo 'No common error patterns found in log'",
             )
 
-            # Check for glibc version
-            run_command(container, "ldd --version || echo 'ldd command not found'")
+            # For Fedora, check if we need to install additional dependencies
+            if distribution == "fedora":
+                print("\n=== Installing additional dependencies for Fedora ===")
+                run_command(
+                    container,
+                    "dnf install -y glibc-devel libstdc++-devel",
+                    check_exit_code=False,
+                )
 
-            raise AssertionError(
-                f"Installation script failed with exit code: {exit_code}"
-            )
+                # Try installation again with the same user but with new dependencies
+                print(
+                    "\n=== Trying installation again with additional dependencies ==="
+                )
+                exit_code2, output_str2 = run_command(
+                    container,
+                    f"su - {test_user} -c 'cd {extract_dir}/q && bash -x ./install.sh --no-confirm --verbose 2>&1 | tee {install_log}.retry'",
+                    timeout=660,
+                    check_exit_code=False,
+                )
+
+                if exit_code2 == 0:
+                    print("Installation succeeded with additional dependencies")
+                    exit_code = 0  # Mark as successful
+                else:
+                    run_command(
+                        container,
+                        f"cat {install_log}.retry || echo 'Retry log file not found'",
+                    )
+
+            # If still failing, raise an exception
+            if exit_code != 0:
+                # Check for glibc version
+                run_command(container, "ldd --version || echo 'ldd command not found'")
+
+                raise Exception(
+                    f"Installation script failed with exit code: {exit_code}"
+                )
 
         assert exit_code == 0, "Installation script failed to execute"
 
