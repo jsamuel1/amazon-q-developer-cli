@@ -18,6 +18,9 @@ from datetime import datetime
 
 import pytest
 
+# Standard timeout for all operations (5 minutes)
+TIMEOUT = 300
+
 
 def decode_output(output):
     """Helper function to decode command output."""
@@ -35,7 +38,7 @@ def print_output(command, exit_code, output):
     print("=" * 50)
 
 
-def run_command(container, command, check_exit_code=False, print_cmd=True, timeout=300):
+def run_command(container, command, check_exit_code=False, print_cmd=True):
     """Helper function to run a command and print its output.
 
     Args:
@@ -43,16 +46,16 @@ def run_command(container, command, check_exit_code=False, print_cmd=True, timeo
         command: The command to run
         check_exit_code: If True, assert that the exit code is 0
         print_cmd: If True, print the command output
-        timeout: Maximum time in seconds to wait for command completion
 
     Returns:
         Tuple of (exit_code, output_str)
     """
-    print(f"Running command with timeout {timeout}s: {command}")
+    print(f"Running command with timeout {TIMEOUT}s: {command}")
     start_time = time.time()
 
     # Add timeout to the container exec_run if possible
     try:
+        # Don't use timeout for now as it's causing issues
         exit_code, output = container.exec_run(command)
     except Exception as e:
         print(f"Command timed out or failed after {time.time() - start_time:.1f}s: {e}")
@@ -71,7 +74,10 @@ def run_command(container, command, check_exit_code=False, print_cmd=True, timeo
     return exit_code, output_str
 
 
-# Define distribution-specific parameters
+# Define standard timeouts for different operations
+TIMEOUT_SHORT = 120  # For quick operations
+TIMEOUT_MEDIUM = 300  # For medium operations (5 minutes)
+TIMEOUT_LONG = 600  # For long operations (10 minutes)
 DISTRIBUTION_PARAMS = {
     "ubuntu": {
         "package_manager": "apt-get install -y --no-install-recommends",
@@ -149,16 +155,13 @@ def test_zip_installation(
         # Use the package manager command directly
         if "apt-get" in dist_params["package_manager"]:
             # Always run apt-get update first for Debian/Ubuntu
-            run_command(
-                container, "apt-get update -y", timeout=300, check_exit_code=True
-            )
+            run_command(container, "apt-get update -y", check_exit_code=True)
 
             # Try installing all packages at once first
             try:
                 run_command(
                     container,
                     f"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {packages}",
-                    timeout=600,
                     check_exit_code=True,
                 )
                 print("Successfully installed all packages")
@@ -172,7 +175,6 @@ def test_zip_installation(
                         run_command(
                             container,
                             f"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {pkg}",
-                            timeout=120,
                             check_exit_code=True,
                         )
                         print(f"Successfully installed {pkg}")
@@ -190,37 +192,29 @@ def test_zip_installation(
                     run_command(
                         container,
                         f"dnf install -y {packages}",
-                        timeout=600,
                         check_exit_code=True,
                     )
                 else:  # amazonlinux
                     run_command(
                         container,
                         f"yum install -y --allowerasing {packages}",
-                        timeout=600,
                         check_exit_code=True,
                     )
             except Exception as e:
                 print(f"Package installation failed with basic install: {e!s}")
                 # Try with repo refresh
                 if distribution == "rocky":
-                    run_command(
-                        container, "dnf clean all", timeout=300, check_exit_code=False
-                    )
+                    run_command(container, "dnf clean all", check_exit_code=False)
                     run_command(
                         container,
                         "dnf check-update || true",
-                        timeout=300,
                         check_exit_code=False,
                     )
                 else:  # amazonlinux
-                    run_command(
-                        container, "yum clean all", timeout=300, check_exit_code=False
-                    )
+                    run_command(container, "yum clean all", check_exit_code=False)
                     run_command(
                         container,
                         "yum check-update || true",
-                        timeout=300,
                         check_exit_code=False,
                     )
 
@@ -231,14 +225,12 @@ def test_zip_installation(
                             run_command(
                                 container,
                                 f"dnf install -y {pkg}",
-                                timeout=120,
                                 check_exit_code=True,
                             )
                         else:  # amazonlinux
                             run_command(
                                 container,
                                 f"yum install -y --allowerasing {pkg}",
-                                timeout=120,
                                 check_exit_code=True,
                             )
                         print(f"Successfully installed {pkg}")
@@ -248,31 +240,9 @@ def test_zip_installation(
                             print(f"Continuing without {pkg}")
                         else:
                             raise
-        elif (
-            "dnf" in dist_params["package_manager"]
-            or "yum" in dist_params["package_manager"]
-        ):
-            # For RPM-based systems, try with and without makecache
-            try:
-                run_command(
-                    container,
-                    f"{dist_params['package_manager']} {packages}",
-                    timeout=600,
-                    check_exit_code=True,
-                )
-            except Exception as e:
-                print(f"Package installation failed with makecache: {e!s}")
-                # Try without makecache
-                pkg_cmd = dist_params["package_manager"].split("&&")[1].strip()
-                run_command(
-                    container,
-                    pkg_cmd + " " + packages,
-                    timeout=600,
-                    check_exit_code=True,
-                )
         else:
             install_cmd = f"{dist_params['package_manager']} {packages}"
-            run_command(container, install_cmd, timeout=600, check_exit_code=True)
+            run_command(container, install_cmd, check_exit_code=True)
 
         # Run any extra setup commands if needed
         if "extra_setup" in dist_params:

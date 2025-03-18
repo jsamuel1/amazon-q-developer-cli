@@ -30,10 +30,11 @@ class ContainerWrapper:
         self.container_id = container_id
         self.runtime = runtime
 
-    def exec_run(self, command):
+    def exec_run(self, command, timeout=None):
         """Execute a command in the container and return the exit code and output."""
         runtime_cmd = [self.runtime, "exec", self.container_id, "sh", "-c", command]
         print(f"Executing in container: {' '.join(runtime_cmd)}")
+        # Don't use timeout parameter for now
         result = subprocess.run(runtime_cmd, capture_output=True, check=False)
         return result.returncode, result.stdout
 
