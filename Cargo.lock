@@ -6791,6 +6791,7 @@ dependencies = [
  "fig_util",
  "flume",
  "futures",
+ "glob",
  "globset",
  "indicatif",
  "indoc",
