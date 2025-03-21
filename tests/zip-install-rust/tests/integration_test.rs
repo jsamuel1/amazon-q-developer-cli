@@ -26,44 +26,92 @@ macro_rules! skip_if_no_container_runtime {
 }
 
 #[tokio::test]
-async fn test_ubuntu_latest() -> Result<()> {
+async fn test_ubuntu_latest_root() -> Result<()> {
     skip_if_no_container_runtime!();
 
     let zip_dir = common::test_data_dir();
     let runner = TestRunner::new(&zip_dir).await?;
-    let result = runner.run_test("ubuntu", "24.04", "x86_64", "glibc").await?;
+    let result = runner
+        .run_root_install_test("ubuntu", "24.04", "x86_64", "glibc", &zip_dir)
+        .await?;
 
-    assert!(result, "Ubuntu 24.04 test failed");
+    assert!(result, "Ubuntu 24.04 root installation test failed");
     Ok(())
 }
 
 #[tokio::test]
-async fn test_amazonlinux_latest() -> Result<()> {
+async fn test_ubuntu_latest_user() -> Result<()> {
     skip_if_no_container_runtime!();
 
     let zip_dir = common::test_data_dir();
     let runner = TestRunner::new(&zip_dir).await?;
-    let result = runner.run_test("amazonlinux", "2023", "x86_64", "glibc").await?;
+    let result = runner
+        .run_user_install_test("ubuntu", "24.04", "x86_64", "glibc", &zip_dir)
+        .await?;
 
-    assert!(result, "Amazon Linux 2023 test failed");
+    assert!(result, "Ubuntu 24.04 user installation test failed");
     Ok(())
 }
 
 #[tokio::test]
-async fn test_alpine_latest() -> Result<()> {
+async fn test_amazonlinux_latest_root() -> Result<()> {
     skip_if_no_container_runtime!();
 
     let zip_dir = common::test_data_dir();
     let runner = TestRunner::new(&zip_dir).await?;
-    let result = runner.run_test("alpine", "3.19", "x86_64", "musl").await?;
+    let result = runner
+        .run_root_install_test("amazonlinux", "2023", "x86_64", "glibc", &zip_dir)
+        .await?;
 
-    assert!(result, "Alpine 3.19 test failed");
+    assert!(result, "Amazon Linux 2023 root installation test failed");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_amazonlinux_latest_user() -> Result<()> {
+    skip_if_no_container_runtime!();
+
+    let zip_dir = common::test_data_dir();
+    let runner = TestRunner::new(&zip_dir).await?;
+    let result = runner
+        .run_user_install_test("amazonlinux", "2023", "x86_64", "glibc", &zip_dir)
+        .await?;
+
+    assert!(result, "Amazon Linux 2023 user installation test failed");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_alpine_latest_root() -> Result<()> {
+    skip_if_no_container_runtime!();
+
+    let zip_dir = common::test_data_dir();
+    let runner = TestRunner::new(&zip_dir).await?;
+    let result = runner
+        .run_root_install_test("alpine", "3.19", "x86_64", "musl", &zip_dir)
+        .await?;
+
+    assert!(result, "Alpine 3.19 root installation test failed");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_alpine_latest_user() -> Result<()> {
+    skip_if_no_container_runtime!();
+
+    let zip_dir = common::test_data_dir();
+    let runner = TestRunner::new(&zip_dir).await?;
+    let result = runner
+        .run_user_install_test("alpine", "3.19", "x86_64", "musl", &zip_dir)
+        .await?;
+
+    assert!(result, "Alpine 3.19 user installation test failed");
     Ok(())
 }
 
 // Test all distributions defined in the crate
 #[tokio::test]
-async fn test_all_distributions() -> Result<()> {
+async fn test_all_distributions_root() -> Result<()> {
     skip_if_no_container_runtime!();
 
     let zip_dir = common::test_data_dir();
@@ -79,15 +127,52 @@ async fn test_all_distributions() -> Result<()> {
 
         for libc in &dist.libc_variants {
             let runner = TestRunner::new(&zip_dir).await?;
-            match runner.run_test(&dist.name, &dist.version, arch, libc).await {
+            match runner
+                .run_root_install_test(&dist.name, &dist.version, arch, libc, &zip_dir)
+                .await
+            {
                 Ok(true) => success_count += 1,
                 _ => failure_count += 1,
             }
         }
     }
 
-    assert_eq!(failure_count, 0, "{} tests failed", failure_count);
-    assert!(success_count > 0, "No tests were run");
+    assert_eq!(failure_count, 0, "{} root installation tests failed", failure_count);
+    assert!(success_count > 0, "No root installation tests were run");
+
+    Ok(())
+}
+
+// Test all distributions defined in the crate
+#[tokio::test]
+async fn test_all_distributions_user() -> Result<()> {
+    skip_if_no_container_runtime!();
+
+    let zip_dir = common::test_data_dir();
+    let mut success_count = 0;
+    let mut failure_count = 0;
+
+    for dist in get_distributions() {
+        // Only test x86_64 to save time
+        let arch = "x86_64";
+        if !dist.architectures.contains(&arch.to_string()) {
+            continue;
+        }
+
+        for libc in &dist.libc_variants {
+            let runner = TestRunner::new(&zip_dir).await?;
+            match runner
+                .run_user_install_test(&dist.name, &dist.version, arch, libc, &zip_dir)
+                .await
+            {
+                Ok(true) => success_count += 1,
+                _ => failure_count += 1,
+            }
+        }
+    }
+
+    assert_eq!(failure_count, 0, "{} user installation tests failed", failure_count);
+    assert!(success_count > 0, "No user installation tests were run");
 
     Ok(())
 }
