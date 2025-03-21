@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+# Install dependencies
+RUN if command -v apt-get &> /dev/null; then \
+      apt-get update && apt-get install -y curl unzip sudo; \
+    elif command -v yum &> /dev/null; then \
+      yum install -y curl unzip sudo; \
+    elif command -v apk &> /dev/null; then \
+      apk add --no-cache curl unzip sudo; \
+    fi
+
+# Create test user
+RUN useradd -m quser || true
+RUN echo "quser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/quser
+
+# Create directories
+RUN mkdir -p /amazon-q-developer-cli/bundle/zip
+WORKDIR /amazon-q-developer-cli
+
+# Test script
+COPY test-script.sh /amazon-q-developer-cli/test-script.sh
+RUN chmod +x /amazon-q-developer-cli/test-script.sh
+
+CMD ["/bin/bash", "/amazon-q-developer-cli/test-script.sh"]

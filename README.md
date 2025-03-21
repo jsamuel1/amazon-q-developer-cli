@@ -59,7 +59,7 @@ git clone https://github.com/aws/amazon-q-for-command-line.git
 
 ### 2. Install platform dependencies
 
-This is all the dep
+This is all the dependencies you'll need:
 
 For Debian/Ubuntu:
 
@@ -90,7 +90,7 @@ xcode-select --install
 brew install mise pnpm protobuf zsh bash fish shellcheck jq
 ```
 
-### 2. Install Rust toolchain using [Rustup](https://rustup.rs):
+### 3. Install Rust toolchain using [Rustup](https://rustup.rs):
 
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -107,7 +107,7 @@ rustup target add x86_64-apple-darwin
 rustup target add aarch64-apple-darwin
 ```
 
-### 3. Setup Python and Node using [`mise`](https://mise.jdx.dev)
+### 4. Setup Python and Node using [`mise`](https://mise.jdx.dev)
 
 Add mise integrations to your shell shell
 
@@ -129,7 +129,7 @@ mise trust
 mise install
 ```
 
-### 4. Setup precommit hooks
+### 5. Setup precommit hooks
 
 ```shell
 # Run `pnpm` in root directory to add pre-commit hooks

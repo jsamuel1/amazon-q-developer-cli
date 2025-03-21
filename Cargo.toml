@@ -8,6 +8,7 @@ members = [
     "crates/macos-utils/appkit-nsworkspace-bindings",
     "tests/fig-api/fig-api-mock",
     "tests/figterm2",
+    "tests/zip-install-rust",
 ]
 
 [workspace.package]
