@@ -93,6 +93,30 @@ You can run the tests using either:
    cargo run --bin run-test -- --distro [distribution] --version [version] --arch [architecture] --libc [libc] --test-type user
    ```
 
+## Code Maintenance
+
+### Removing Deprecated Code
+
+When refactoring or updating the test code:
+- Remove deprecated functions instead of just marking them as deprecated
+- Eliminate unnecessary code duplication
+- Consolidate common functionality into shared methods
+- Keep the codebase clean and maintainable
+
+### Before Committing
+
+Always run the following commands before committing changes:
+
+```bash
+# Format the code
+cargo +nightly fmt
+
+# Run clippy to check for issues
+cargo +nightly clippy --all-targets -- -D warnings
+```
+
+This ensures that the code follows the project's style guidelines and doesn't contain common issues or anti-patterns.
+
 ## Adding New Distributions
 
 To add a new distribution for testing:
