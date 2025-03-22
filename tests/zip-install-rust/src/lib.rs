@@ -413,47 +413,6 @@ echo "=== User installation test completed successfully ==="
             distro, version, arch, libc
         )
     }
-
-    /// Generate test script for container (deprecated, use generate_root_install_script and
-    /// generate_user_install_script instead)
-    #[allow(dead_code)]
-    fn generate_test_script(&self, distro: &str, version: &str, arch: &str, libc: &str) -> String {
-        format!(
-            r#"#!/bin/bash
-set -e
-
-echo "=== Testing Amazon Q Developer CLI installation ==="
-echo "Distribution: {}:{}"
-echo "Architecture: {}"
-echo "Libc: {}"
-
-# Test as root user
-echo "=== Testing as root user ==="
-cd /amazon-q-developer-cli/bundle
-unzip -o amazon-q-developer-cli.zip
-ls -la
-cd q
-export Q_INSTALL_ROOT=true
-./install.sh --force --no-confirm
-
-# Verify installation
-which q
-q --version
-
-# Test as regular user
-echo "=== Testing as regular user ==="
-su - quser -c "cd /amazon-q-developer-cli/bundle && unzip -o amazon-q-developer-cli.zip"
-su - quser -c "cd /amazon-q-developer-cli/bundle/q && ./install.sh --no-confirm"
-
-# Verify installation
-su - quser -c "which q"
-su - quser -c "q --version"
-
-echo "=== Test completed successfully ==="
-"#,
-            distro, version, arch, libc
-        )
-    }
 }
 
 /// Dockerfile generator for test containers

@@ -122,15 +122,8 @@ async fn main() -> Result<()> {
                     }
                 },
                 _ => {
-                    info!("Running both installation tests for {distro} {version} ({arch}, {libc})");
-                    let result = runner.run_test(distro, version, arch, libc, &zip_dir).await?;
-                    if result {
-                        info!("All installation tests passed!");
-                        Ok(())
-                    } else {
-                        eprintln!("Installation tests failed!");
-                        process::exit(1);
-                    }
+                    eprintln!("Invalid test type: {test_type}. Must be 'root', 'user', or 'both'");
+                    process::exit(1);
                 },
             }
         },
