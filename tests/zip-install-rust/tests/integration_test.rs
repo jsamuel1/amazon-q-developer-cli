@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use test_case::test_case;
 use zip_install_test::{

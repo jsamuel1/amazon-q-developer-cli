@@ -1,14 +1,24 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::{
+    Result,
+    anyhow,
+};
+use bollard::Docker;
 use bollard::container::{
-    Config, CreateContainerOptions, RemoveContainerOptions, StartContainerOptions,
+    Config,
+    CreateContainerOptions,
+    RemoveContainerOptions,
+    StartContainerOptions,
 };
 use bollard::image::BuildImageOptions;
-use bollard::Docker;
 use futures_util::stream::StreamExt;
-use log::{error, info, warn};
+use log::{
+    error,
+    info,
+    warn,
+};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -144,14 +154,9 @@ impl TestRunner {
         libc: &str,
         zip_dir: impl AsRef<Path>,
     ) -> Result<bool> {
-        self.run_installation_test(
-            distro,
-            version,
-            arch,
-            libc,
-            zip_dir,
-            |d, v, a, l| self.generate_root_install_script(d, v, a, l),
-        )
+        self.run_installation_test(distro, version, arch, libc, zip_dir, |d, v, a, l| {
+            self.generate_root_install_script(d, v, a, l)
+        })
         .await
     }
 
@@ -164,14 +169,9 @@ impl TestRunner {
         libc: &str,
         zip_dir: impl AsRef<Path>,
     ) -> Result<bool> {
-        self.run_installation_test(
-            distro,
-            version,
-            arch,
-            libc,
-            zip_dir,
-            |d, v, a, l| self.generate_user_install_script(d, v, a, l),
-        )
+        self.run_installation_test(distro, version, arch, libc, zip_dir, |d, v, a, l| {
+            self.generate_user_install_script(d, v, a, l)
+        })
         .await
     }
 
