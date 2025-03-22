@@ -10662,6 +10662,7 @@ version = "1.7.1"
 dependencies = [
  "anyhow",
  "bollard",
+ "clap",
  "env_logger",
  "futures",
  "futures-util",
