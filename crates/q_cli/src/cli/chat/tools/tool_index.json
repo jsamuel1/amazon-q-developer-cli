@@ -15,6 +15,37 @@
       ]
     }
   },
+  "execute_qchat": {
+    "name": "execute_qchat",
+    "description": "Execute internal commands within the q chat system. This allows the AI assistant to directly execute commands like /quit, /clear, /help, or manage context, profiles, tools, and settings.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The command to execute (e.g., \"quit\", \"context\", \"settings\")"
+        },
+        "subcommand": {
+          "type": "string",
+          "description": "Optional subcommand (e.g., \"list\", \"add\", \"remove\")"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional arguments for the command"
+        },
+        "flags": {
+          "type": "object",
+          "description": "Optional flags for the command, where keys are flag names and values are flag values (empty string for boolean flags)"
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
   "fs_read": {
     "name": "fs_read",
     "description": "Tool for reading files (for example, `cat -n`) and directories (for example, `ls -la`). The behavior of this tool is determined by the `mode` parameter. The available modes are:\n- line: Show lines in a file, given by an optional `start_line` and optional `end_line`.\n- directory: List directory contents. Content is returned in the \"long format\" of ls (that is, `ls -la`).\n- search: Search for a pattern in a file. The pattern is a string. The matching is case insensitive.\n\nExample Usage:\n1. Read all lines from a file: command=\"line\", path=\"/path/to/file.txt\"\n2. Read the last 5 lines from a file: command=\"line\", path=\"/path/to/file.txt\", start_line=-5\n3. List the files in the home directory: command=\"line\", path=\"~\"\n4. Recursively list files in a directory to a max depth of 2: command=\"line\", path=\"/path/to/directory\", depth=2\n5. Search for all instances of \"test\" in a file: command=\"search\", path=\"/path/to/file.txt\", pattern=\"test\"\n",
