@@ -11,23 +11,32 @@ pub struct ProfileCommand {
 }
 
 impl ProfileCommand {
-    const CREATE: &'static str = "create";
-    const DELETE: &'static str = "delete";
-    // Subcommand constants
-    const HELP: &'static str = "help";
-    const LIST: &'static str = "list";
+    const CREATE: (&'static str, &'static str) = ("create", "Creating new profile");
+    const DELETE: (&'static str, &'static str) = ("delete", "Deleting profile");
+    // Subcommand constants with their descriptions
+    const HELP: (&'static str, &'static str) = ("help", "Showing profile help information");
+    const LIST: (&'static str, &'static str) = ("list", "Listing available profiles");
     // Subcommands that require user confirmation
-    const MODIFYING_SUBCOMMANDS: [&'static str; 4] = [Self::CREATE, Self::DELETE, Self::RENAME, Self::SET];
-    const RENAME: &'static str = "rename";
-    const SET: &'static str = "set";
-    // All valid subcommands
-    const VALID_SUBCOMMANDS: [&'static str; 6] = [
+    const MODIFYING_SUBCOMMANDS: [&'static str; 4] = [Self::CREATE.0, Self::DELETE.0, Self::RENAME.0, Self::SET.0];
+    const RENAME: (&'static str, &'static str) = ("rename", "Renaming profile");
+    const SET: (&'static str, &'static str) = ("set", "Setting active profile");
+    // Map of subcommand names to their descriptions
+    const SUBCOMMAND_DESCRIPTIONS: [(&'static str, &'static str); 6] = [
         Self::HELP,
         Self::LIST,
         Self::SET,
         Self::CREATE,
         Self::DELETE,
         Self::RENAME,
+    ];
+    // All valid subcommands
+    const VALID_SUBCOMMANDS: [&'static str; 6] = [
+        Self::HELP.0,
+        Self::LIST.0,
+        Self::SET.0,
+        Self::CREATE.0,
+        Self::DELETE.0,
+        Self::RENAME.0,
     ];
 
     pub fn new(subcommand: Option<&str>) -> Self {
@@ -49,6 +58,14 @@ impl ProfileCommand {
             .as_deref()
             .is_some_and(|s| Self::VALID_SUBCOMMANDS.contains(&s))
     }
+
+    /// Get the description for a subcommand
+    fn get_subcommand_description(subcmd: &str) -> &'static str {
+        Self::SUBCOMMAND_DESCRIPTIONS
+            .iter()
+            .find(|(cmd, _)| *cmd == subcmd)
+            .map_or("Executing profile command", |(_, desc)| *desc)
+    }
 }
 
 impl CommandBehavior for ProfileCommand {
@@ -67,14 +84,8 @@ impl CommandBehavior for ProfileCommand {
     }
 
     fn queue_description(&self, updates: &mut dyn Write) -> Result<()> {
-        let description = match self.subcommand.as_deref() {
-            Some(Self::HELP) => "Showing profile help information".to_string(),
-            Some(Self::LIST) => "Listing available profiles".to_string(),
-            Some(Self::SET) => "Setting active profile".to_string(),
-            Some(Self::CREATE) => "Creating new profile".to_string(),
-            Some(Self::DELETE) => "Deleting profile".to_string(),
-            Some(Self::RENAME) => "Renaming profile".to_string(),
-            Some(subcmd) => format!("Executing profile {}", subcmd),
+        let description = match &self.subcommand {
+            Some(subcmd) => Self::get_subcommand_description(subcmd).to_string(),
             None => "Executing profile command".to_string(),
         };
 
