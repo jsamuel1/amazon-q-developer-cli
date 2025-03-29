@@ -551,7 +551,7 @@ mod tests {
 
     use super::*;
     use crate::cli::chat::context::AMAZONQ_FILENAME;
-    use crate::cli::chat::tool_manager::ToolManager;
+    use crate::cli::chat::tools::tool_manager::ToolManager;
 
     #[test]
     fn test_truncate_safe() {

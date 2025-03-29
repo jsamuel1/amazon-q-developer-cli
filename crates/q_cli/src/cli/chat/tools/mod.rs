@@ -1,9 +1,11 @@
+pub mod command_behavior;
 pub mod custom_tool;
 pub mod execute_bash;
 pub mod execute_qchat;
 pub mod fs_read;
 pub mod fs_write;
 pub mod gh_issue;
+pub mod tool_manager;
 pub mod use_aws;
 
 use std::io::Write;
@@ -16,6 +18,7 @@ use aws_smithy_types::{
     Document,
     Number as SmithyNumber,
 };
+use command_behavior::CommandBehavior;
 use custom_tool::CustomTool;
 use execute_bash::ExecuteBash;
 use execute_qchat::ExecuteQChat;
@@ -120,7 +123,7 @@ impl Tool {
             Tool::UseAws(use_aws) => use_aws.validate(ctx).await,
             Tool::Custom(custom_tool) => custom_tool.validate(ctx).await,
             Tool::GhIssue(gh_issue) => gh_issue.validate(ctx).await,
-            Tool::ExecuteQChat(execute_qchat) => execute_qchat.validate(ctx).await,
+            Tool::ExecuteQChat(execute_qchat) => execute_qchat.validate(ctx),
         }
     }
 }

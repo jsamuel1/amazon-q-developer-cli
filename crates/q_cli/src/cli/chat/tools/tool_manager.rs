@@ -28,19 +28,22 @@ use serde::{
 };
 use tracing::error;
 
-use super::parser::ToolUse;
-use super::tools::Tool;
-use super::tools::custom_tool::{
+use super::custom_tool::{
+    CustomTool,
     CustomToolClient,
     CustomToolConfig,
 };
-use super::tools::execute_bash::ExecuteBash;
-use super::tools::fs_read::FsRead;
-use super::tools::fs_write::FsWrite;
-use super::tools::gh_issue::GhIssue;
-use super::tools::use_aws::UseAws;
-use crate::cli::chat::tools::ToolSpec;
-use crate::cli::chat::tools::custom_tool::CustomTool;
+use super::execute_bash::ExecuteBash;
+use super::execute_qchat::ExecuteQChat;
+use super::fs_read::FsRead;
+use super::fs_write::FsWrite;
+use super::gh_issue::GhIssue;
+use super::use_aws::UseAws;
+use super::{
+    Tool,
+    ToolSpec,
+};
+use crate::cli::chat::parser::ToolUse;
 
 const NAMESPACE_DELIMITER: &str = "___";
 // This applies for both mcp server and tool name since in the end the tool name as seen by the
@@ -139,7 +142,7 @@ impl ToolManager {
     }
 
     pub async fn load_tools(&self) -> eyre::Result<HashMap<String, ToolSpec>> {
-        let mut tool_specs = serde_json::from_str::<HashMap<String, ToolSpec>>(include_str!("tools/tool_index.json"))?;
+        let mut tool_specs = serde_json::from_str::<HashMap<String, ToolSpec>>(include_str!("tool_index.json"))?;
         let load_tool = self
             .clients
             .iter()
@@ -191,6 +194,7 @@ impl ToolManager {
             "execute_bash" => Tool::ExecuteBash(serde_json::from_value::<ExecuteBash>(value.args).map_err(map_err)?),
             "use_aws" => Tool::UseAws(serde_json::from_value::<UseAws>(value.args).map_err(map_err)?),
             "report_issue" => Tool::GhIssue(serde_json::from_value::<GhIssue>(value.args).map_err(map_err)?),
+            "execute_qchat" => Tool::ExecuteQChat(serde_json::from_value::<ExecuteQChat>(value.args).map_err(map_err)?),
             // Note that this name is namespaced with server_name{DELIMITER}tool_name
             name => {
                 let (server_name, tool_name) = name.split_once(NAMESPACE_DELIMITER).ok_or(ToolResult {
