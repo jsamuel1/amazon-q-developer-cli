@@ -11,14 +11,16 @@ pub struct SettingsCommand {
 }
 
 impl SettingsCommand {
-    // Subcommand constants
-    const LIST: &'static str = "list";
+    // Subcommand constants with their descriptions
+    const LIST: (&'static str, &'static str) = ("list", "Listing current settings");
     // Subcommands that require user confirmation
-    const MODIFYING_SUBCOMMANDS: [&'static str; 2] = [Self::SET, Self::RESET];
-    const RESET: &'static str = "reset";
-    const SET: &'static str = "set";
+    const MODIFYING_SUBCOMMANDS: [&'static str; 2] = [Self::SET.0, Self::RESET.0];
+    const RESET: (&'static str, &'static str) = ("reset", "Resetting settings to default");
+    const SET: (&'static str, &'static str) = ("set", "Setting configuration");
+    // Map of subcommand names to their descriptions
+    const SUBCOMMAND_DESCRIPTIONS: [(&'static str, &'static str); 3] = [Self::LIST, Self::SET, Self::RESET];
     // All valid subcommands
-    const VALID_SUBCOMMANDS: [&'static str; 3] = [Self::LIST, Self::SET, Self::RESET];
+    const VALID_SUBCOMMANDS: [&'static str; 3] = [Self::LIST.0, Self::SET.0, Self::RESET.0];
 
     pub fn new(subcommand: Option<&str>) -> Self {
         Self {
@@ -39,6 +41,14 @@ impl SettingsCommand {
             .as_deref()
             .is_some_and(|s| Self::VALID_SUBCOMMANDS.contains(&s))
     }
+
+    /// Get the description for a subcommand
+    fn get_subcommand_description(subcmd: &str) -> &'static str {
+        Self::SUBCOMMAND_DESCRIPTIONS
+            .iter()
+            .find(|(cmd, _)| *cmd == subcmd)
+            .map_or("Executing settings command", |(_, desc)| *desc)
+    }
 }
 
 impl CommandBehavior for SettingsCommand {
@@ -57,11 +67,8 @@ impl CommandBehavior for SettingsCommand {
     }
 
     fn queue_description(&self, updates: &mut dyn Write) -> Result<()> {
-        let description = match self.subcommand.as_deref() {
-            Some(Self::LIST) => "Listing current settings".to_string(),
-            Some(Self::SET) => "Setting configuration".to_string(),
-            Some(Self::RESET) => "Resetting settings to default".to_string(),
-            Some(subcmd) => format!("Executing settings {}", subcmd),
+        let description = match &self.subcommand {
+            Some(subcmd) => Self::get_subcommand_description(subcmd).to_string(),
             None => "Executing settings command".to_string(),
         };
 

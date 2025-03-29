@@ -11,24 +11,22 @@ pub struct ToolsCommand {
 }
 
 impl ToolsCommand {
-    const DISABLE: &'static str = "disable";
-    const ENABLE: &'static str = "enable";
-    const INFO: &'static str = "info";
-    const INSTALL: &'static str = "install";
-    // Subcommand constants
-    const LIST: &'static str = "list";
+    const DISABLE: (&'static str, &'static str) = ("disable", "Disabling tool");
+    const ENABLE: (&'static str, &'static str) = ("enable", "Enabling tool");
+    const INFO: (&'static str, &'static str) = ("info", "Showing information about tool");
+    const INSTALL: (&'static str, &'static str) = ("install", "Installing tool");
+    // Subcommand constants with their descriptions
+    const LIST: (&'static str, &'static str) = ("list", "Listing available tools");
     // Subcommands that require user confirmation
     const MODIFYING_SUBCOMMANDS: [&'static str; 5] = [
-        Self::ENABLE,
-        Self::DISABLE,
-        Self::INSTALL,
-        Self::UNINSTALL,
-        Self::UPDATE,
+        Self::ENABLE.0,
+        Self::DISABLE.0,
+        Self::INSTALL.0,
+        Self::UNINSTALL.0,
+        Self::UPDATE.0,
     ];
-    const UNINSTALL: &'static str = "uninstall";
-    const UPDATE: &'static str = "update";
-    // All valid subcommands
-    const VALID_SUBCOMMANDS: [&'static str; 7] = [
+    // Map of subcommand names to their descriptions
+    const SUBCOMMAND_DESCRIPTIONS: [(&'static str, &'static str); 7] = [
         Self::LIST,
         Self::ENABLE,
         Self::DISABLE,
@@ -36,6 +34,18 @@ impl ToolsCommand {
         Self::UNINSTALL,
         Self::UPDATE,
         Self::INFO,
+    ];
+    const UNINSTALL: (&'static str, &'static str) = ("uninstall", "Uninstalling tool");
+    const UPDATE: (&'static str, &'static str) = ("update", "Updating tools");
+    // All valid subcommands
+    const VALID_SUBCOMMANDS: [&'static str; 7] = [
+        Self::LIST.0,
+        Self::ENABLE.0,
+        Self::DISABLE.0,
+        Self::INSTALL.0,
+        Self::UNINSTALL.0,
+        Self::UPDATE.0,
+        Self::INFO.0,
     ];
 
     pub fn new(subcommand: Option<&str>) -> Self {
@@ -57,6 +67,14 @@ impl ToolsCommand {
             .as_deref()
             .is_some_and(|s| Self::VALID_SUBCOMMANDS.contains(&s))
     }
+
+    /// Get the description for a subcommand
+    fn get_subcommand_description(subcmd: &str) -> &'static str {
+        Self::SUBCOMMAND_DESCRIPTIONS
+            .iter()
+            .find(|(cmd, _)| *cmd == subcmd)
+            .map_or("Executing tools command", |(_, desc)| *desc)
+    }
 }
 
 impl CommandBehavior for ToolsCommand {
@@ -75,15 +93,8 @@ impl CommandBehavior for ToolsCommand {
     }
 
     fn queue_description(&self, updates: &mut dyn Write) -> Result<()> {
-        let description = match self.subcommand.as_deref() {
-            Some(Self::LIST) => "Listing available tools".to_string(),
-            Some(Self::ENABLE) => "Enabling tool".to_string(),
-            Some(Self::DISABLE) => "Disabling tool".to_string(),
-            Some(Self::INSTALL) => "Installing tool".to_string(),
-            Some(Self::UNINSTALL) => "Uninstalling tool".to_string(),
-            Some(Self::UPDATE) => "Updating tools".to_string(),
-            Some(Self::INFO) => "Showing information about tool".to_string(),
-            Some(subcmd) => format!("Executing tools {}", subcmd),
+        let description = match &self.subcommand {
+            Some(subcmd) => Self::get_subcommand_description(subcmd).to_string(),
             None => "Executing tools command".to_string(),
         };
 

@@ -11,23 +11,27 @@ pub struct ContextCommand {
 }
 
 impl ContextCommand {
-    const ADD: &'static str = "add";
-    const CLEAR: &'static str = "clear";
-    const EXPORT: &'static str = "export";
-    // Subcommand constants
-    const HELP: &'static str = "help";
-    const IMPORT: &'static str = "import";
+    const ADD: (&'static str, &'static str) = ("add", "Adding context from file(s)");
+    const CLEAR: (&'static str, &'static str) = ("clear", "Clearing all context");
+    const EXPORT: (&'static str, &'static str) = ("export", "Exporting conversation history");
+    // Subcommand constants with their descriptions
+    const HELP: (&'static str, &'static str) = ("help", "Showing context help information");
+    const IMPORT: (&'static str, &'static str) = ("import", "Importing conversation history");
     // Subcommands that require user confirmation
-    const MODIFYING_SUBCOMMANDS: [&'static str; 5] =
-        [Self::ADD, Self::REMOVE, Self::CLEAR, Self::PRUNE, Self::ROLLBACK];
-    const PRUNE: &'static str = "prune";
-    const QUERY: &'static str = "query";
-    const REMOVE: &'static str = "rm";
-    const ROLLBACK: &'static str = "rollback";
-    const SHOW: &'static str = "show";
-    const SUMMARIZE: &'static str = "summarize";
-    // All valid subcommands
-    const VALID_SUBCOMMANDS: [&'static str; 11] = [
+    const MODIFYING_SUBCOMMANDS: [&'static str; 5] = [
+        Self::ADD.0,
+        Self::REMOVE.0,
+        Self::CLEAR.0,
+        Self::PRUNE.0,
+        Self::ROLLBACK.0,
+    ];
+    const PRUNE: (&'static str, &'static str) = ("prune", "Pruning conversation history");
+    const QUERY: (&'static str, &'static str) = ("query", "Querying conversation history");
+    const REMOVE: (&'static str, &'static str) = ("rm", "Removing context item(s)");
+    const ROLLBACK: (&'static str, &'static str) = ("rollback", "Rolling back conversation to previous point");
+    const SHOW: (&'static str, &'static str) = ("show", "Showing current context");
+    // Map of subcommand names to their descriptions
+    const SUBCOMMAND_DESCRIPTIONS: [(&'static str, &'static str); 11] = [
         Self::HELP,
         Self::SHOW,
         Self::ADD,
@@ -39,6 +43,21 @@ impl ContextCommand {
         Self::SUMMARIZE,
         Self::EXPORT,
         Self::IMPORT,
+    ];
+    const SUMMARIZE: (&'static str, &'static str) = ("summarize", "Summarizing conversation history");
+    // All valid subcommands
+    const VALID_SUBCOMMANDS: [&'static str; 11] = [
+        Self::HELP.0,
+        Self::SHOW.0,
+        Self::ADD.0,
+        Self::REMOVE.0,
+        Self::CLEAR.0,
+        Self::QUERY.0,
+        Self::PRUNE.0,
+        Self::ROLLBACK.0,
+        Self::SUMMARIZE.0,
+        Self::EXPORT.0,
+        Self::IMPORT.0,
     ];
 
     pub fn new(subcommand: Option<&str>) -> Self {
@@ -60,6 +79,14 @@ impl ContextCommand {
             .as_deref()
             .is_some_and(|s| Self::VALID_SUBCOMMANDS.contains(&s))
     }
+
+    /// Get the description for a subcommand
+    fn get_subcommand_description(subcmd: &str) -> &'static str {
+        Self::SUBCOMMAND_DESCRIPTIONS
+            .iter()
+            .find(|(cmd, _)| *cmd == subcmd)
+            .map_or("Executing context command", |(_, desc)| *desc)
+    }
 }
 
 impl CommandBehavior for ContextCommand {
@@ -78,19 +105,8 @@ impl CommandBehavior for ContextCommand {
     }
 
     fn queue_description(&self, updates: &mut dyn Write) -> Result<()> {
-        let description = match self.subcommand.as_deref() {
-            Some(Self::HELP) => "Showing context help information".to_string(),
-            Some(Self::SHOW) => "Showing current context".to_string(),
-            Some(Self::ADD) => "Adding context from file(s)".to_string(),
-            Some(Self::REMOVE) => "Removing context item(s)".to_string(),
-            Some(Self::CLEAR) => "Clearing all context".to_string(),
-            Some(Self::QUERY) => "Querying conversation history".to_string(),
-            Some(Self::PRUNE) => "Pruning conversation history".to_string(),
-            Some(Self::ROLLBACK) => "Rolling back conversation to previous point".to_string(),
-            Some(Self::SUMMARIZE) => "Summarizing conversation history".to_string(),
-            Some(Self::EXPORT) => "Exporting conversation history".to_string(),
-            Some(Self::IMPORT) => "Importing conversation history".to_string(),
-            Some(subcmd) => format!("Executing context {}", subcmd),
+        let description = match &self.subcommand {
+            Some(subcmd) => Self::get_subcommand_description(subcmd).to_string(),
             None => "Executing context command".to_string(),
         };
 
