@@ -12,7 +12,10 @@ pub trait CommandBehavior {
     fn validate(&self, ctx: &Context) -> Result<()>;
 
     /// Returns a description of what the command will do
-    fn queue_description(&self, updates: &mut impl Write) -> Result<()>;
+    ///
+    /// Note: Using a concrete type (Box<dyn Write>) instead of a generic parameter (impl Write)
+    /// to ensure the trait is object-safe
+    fn queue_description(&self, updates: &mut dyn Write) -> Result<()>;
 
     /// Formats the command for display
     fn format_command(&self) -> String;

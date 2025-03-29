@@ -1,4 +1,5 @@
 pub mod command_behavior;
+pub mod commands;
 pub mod custom_tool;
 pub mod execute_bash;
 pub mod execute_qchat;
@@ -18,7 +19,6 @@ use aws_smithy_types::{
     Document,
     Number as SmithyNumber,
 };
-use command_behavior::CommandBehavior;
 use custom_tool::CustomTool;
 use execute_bash::ExecuteBash;
 use execute_qchat::ExecuteQChat;
