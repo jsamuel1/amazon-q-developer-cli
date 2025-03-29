@@ -1,11 +1,11 @@
 mod command;
+mod command_config;
 mod context;
 mod conversation_state;
 mod input_source;
 mod parse;
 mod parser;
 mod prompt;
-mod tool_manager;
 mod tools;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use command::Command;
+use command_config::CommandExecutionConfig;
 use context::ContextManager;
 use conversation_state::ConversationState;
 use crossterm::style::{
@@ -66,12 +67,12 @@ use tokio::signal::unix::{
     SignalKind,
     signal,
 };
-use tool_manager::{
+use tools::Tool;
+use tools::gh_issue::GhIssueContext;
+use tools::tool_manager::{
     McpServerConfig,
     ToolManager,
 };
-use tools::Tool;
-use tools::gh_issue::GhIssueContext;
 use tracing::{
     debug,
     error,
@@ -256,6 +257,8 @@ pub struct ChatContext<W: Write> {
     settings: Settings,
     /// The [Write] destination for printing conversation text.
     output: W,
+    /// Configuration for command execution
+    command_config: CommandExecutionConfig,
     initial_input: Option<String>,
     input_source: InputSource,
     interactive: bool,
@@ -271,8 +274,7 @@ pub struct ChatContext<W: Write> {
     /// State used to keep track of tool use relation
     tool_use_status: ToolUseStatus,
     /// Abstraction that consolidates custom tools with native ones
-    tool_manager: ToolManager,
-    accept_all: bool,
+    tool_manager: tools::tool_manager::ToolManager,
     /// Any failed requests that could be useful for error report/debugging
     failed_request_ids: Vec<String>,
 }
@@ -310,7 +312,7 @@ impl<W: Write> ChatContext<W> {
             tool_use_telemetry_events: HashMap::new(),
             tool_use_status: ToolUseStatus::Idle,
             tool_manager,
-            accept_all,
+            command_config: CommandExecutionConfig { accept_all },
             failed_request_ids: Vec::new(),
         })
     }
@@ -696,12 +698,12 @@ where
                 }
             },
             Command::AcceptAll => {
-                self.accept_all = !self.accept_all;
+                self.command_config.toggle_accept_all();
 
                 execute!(
                     self.output,
                     style::SetForegroundColor(Color::Green),
-                    style::Print(format!("\n{}\n\n", match self.accept_all {
+                    style::Print(format!("\n{}\n\n", match self.command_config.get_accept_all() {
                         true =>
                             "Disabled acceptance prompting.\nAgents can sometimes do unexpected things so understand the risks.",
                         false => "Enabled acceptance prompting. Run again to disable.",
@@ -1410,7 +1412,8 @@ where
             return Ok(ChatState::HandleResponseStream(response));
         }
 
-        let skip_acceptance = self.accept_all || queued_tools.iter().all(|tool| !tool.1.requires_acceptance(&self.ctx));
+        let skip_acceptance = self.command_config.get_accept_all()
+            || queued_tools.iter().all(|tool| !tool.1.requires_acceptance(&self.ctx));
 
         match (skip_acceptance, self.interactive) {
             (true, _) => {

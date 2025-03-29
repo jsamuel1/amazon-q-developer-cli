@@ -9,10 +9,10 @@ use tracing::{
     info,
 };
 
+use super::command_behavior::CommandBehavior;
 use super::{
     InvokeOutput,
     OutputKind,
-    command_behavior::CommandBehavior,
 };
 
 /// Request structure for the execute_qchat tool
