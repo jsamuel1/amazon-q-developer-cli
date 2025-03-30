@@ -38,6 +38,13 @@ When working with file operations in Rust:
    - Define data structures separately from the code that operates on them
    - Use methods or free functions to implement behavior on data structures
 
+5. Use appropriate parameter types for trait objects
+   - Use `&dyn Trait` for read-only access to trait objects
+   - Use `&mut dyn Trait` when the trait object needs to be modified
+   - Use `Box<dyn Trait>` when ownership needs to be transferred
+   - Consider using `Arc<dyn Trait>` for shared ownership in multi-threaded contexts
+   - Prefer static dispatch with generics (`impl Trait`) over dynamic dispatch (`dyn Trait`) when performance is critical
+
 ## Git
 
 ### Committing Changes
