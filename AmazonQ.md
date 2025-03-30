@@ -45,6 +45,53 @@ When working with file operations in Rust:
    - Consider using `Arc<dyn Trait>` for shared ownership in multi-threaded contexts
    - Prefer static dispatch with generics (`impl Trait`) over dynamic dispatch (`dyn Trait`) when performance is critical
 
+### q_cli Crate Specific Patterns
+
+1. Registry Pattern for Command Lookup
+   - Use a registry pattern (like `CommandRegistry`) for command lookup and discovery
+   - Centralize command registration to make adding new commands easier
+   - Avoid direct dependencies between command implementations
+
+2. Tool-based Architecture
+   - Implement capabilities as tools with consistent interfaces but specialized behavior
+   - Use a `ToolManager` to dynamically load and manage tools
+   - Separate tool definition from tool execution
+
+3. Interface Segregation
+   - Define focused interfaces (like `CommandBehavior`) for specific behaviors
+   - Follow the Interface Segregation Principle from SOLID
+   - Make components more modular and easier to test
+
+4. Configuration Management
+   - Load and merge configurations from multiple sources (global and local)
+   - Prioritize local configurations over global ones with appropriate warnings
+   - Use consistent serialization/deserialization patterns
+
+5. Error Handling Patterns
+   - Use the `eyre` crate consistently for error handling
+   - Add context to errors using `.context()` or `.wrap_err()`
+   - Make error messages user-friendly and actionable
+
+6. Asynchronous Programming Patterns
+   - Use async/await for I/O operations
+   - Handle concurrent operations with `buffer_unordered`
+   - Process streams for handling multiple asynchronous tasks
+
+7. Path Handling and Sanitization
+   - Implement proper path handling, including tilde expansion and sanitization
+   - Consider relative vs. absolute path handling for better user experience
+   - Ensure cross-platform path handling
+
+8. Testing Strategies
+   - Write unit tests with mocked contexts
+   - Create test utilities for setting up test environments
+   - Use parameterized tests to cover multiple scenarios
+
+9. Telemetry and Logging
+   - Implement structured logging with different verbosity levels
+   - Track command usage with telemetry
+   - Configure log destinations (file vs stdout) based on context
+
 ## Git
 
 ### Committing Changes
