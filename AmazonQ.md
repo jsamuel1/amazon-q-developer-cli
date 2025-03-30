@@ -17,6 +17,27 @@ When working with file operations in Rust:
 3. Use `serde_json::to_string_pretty()` + `fs::write()` instead of creating a file and then writing to it with `serde_json::to_writer_pretty()`
 4. Keep imports organized by functionality (e.g., group path-related imports together)
 
+### Code Organization and Design Patterns
+
+1. Prefer trait-based polymorphism over large match statements on enums
+   - Use traits to define behavior interfaces
+   - Implement traits for different types rather than using match statements on enum variants
+   - This improves extensibility, maintainability, and testability
+
+2. Follow the Command pattern for implementing commands
+   - Define a common interface (trait) for all commands
+   - Each command should be its own type implementing the common interface
+   - Use a registry or factory to look up command implementations by name
+   - Avoid large match statements that need to be updated for each new command
+
+3. Use dependency injection where appropriate
+   - Pass dependencies as parameters rather than creating them inside functions
+   - This improves testability and flexibility
+
+4. Separate behavior from data
+   - Define data structures separately from the code that operates on them
+   - Use methods or free functions to implement behavior on data structures
+
 ## Git
 
 ### Committing Changes
