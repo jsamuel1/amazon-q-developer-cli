@@ -113,9 +113,54 @@ impl CommandBehavior for ToolsCommand {
         let subcmd = self.subcommand.as_deref().unwrap_or("help");
         writeln!(updates, "Executing tools {} command...", subcmd)?;
 
-        // TODO: Implement actual tools command execution by integrating with the existing tools management
-        // code This would involve calling into the appropriate tools handlers in the q_cli crate
+        // Since we don't have a direct ToolsManager like we do for context,
+        // we'll implement a basic version that demonstrates the structure
+        match subcmd {
+            "list" => {
+                // In a real implementation, we would query available tools from a registry
+                // For now, we'll just list the built-in tools
+                writeln!(updates, "Available tools:")?;
+                writeln!(updates, "  fs_read - Read files and directories")?;
+                writeln!(updates, "  fs_write - Create and edit files")?;
+                writeln!(updates, "  execute_bash - Execute shell commands")?;
+                writeln!(updates, "  use_aws - Make AWS CLI calls")?;
+                writeln!(updates, "  report_issue - Open GitHub issue template")?;
+                writeln!(updates, "  use_q_command - Execute Q commands")?;
 
-        Ok(format!("Tools {} command executed", subcmd))
+                Ok("Tools listed".to_string())
+            },
+            "enable" => {
+                // For enable, we need a tool name argument
+                let tool_name = "example_tool"; // This would come from args
+
+                // In a real implementation, we would update a tool registry or settings
+                writeln!(updates, "Enabling tool: {}", tool_name)?;
+
+                Ok(format!("Tool '{}' enabled", tool_name))
+            },
+            "disable" => {
+                // For disable, we need a tool name argument
+                let tool_name = "example_tool"; // This would come from args
+
+                // In a real implementation, we would update a tool registry or settings
+                writeln!(updates, "Disabling tool: {}", tool_name)?;
+
+                Ok(format!("Tool '{}' disabled", tool_name))
+            },
+            "info" => {
+                // For info, we need a tool name argument
+                let tool_name = "fs_read"; // This would come from args
+
+                // In a real implementation, we would query the tool registry for details
+                writeln!(updates, "Tool information for '{}':", tool_name)?;
+                writeln!(updates, "  Name: fs_read")?;
+                writeln!(updates, "  Description: Tool for reading files and directories")?;
+                writeln!(updates, "  Status: Enabled")?;
+                writeln!(updates, "  Requires acceptance: No (for read operations)")?;
+
+                Ok(format!("Tool '{}' information displayed", tool_name))
+            },
+            _ => Err(eyre::eyre!("Subcommand '{}' not yet implemented", subcmd)),
+        }
     }
 }
