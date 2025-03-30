@@ -34,11 +34,11 @@ use super::custom_tool::{
     CustomToolConfig,
 };
 use super::execute_bash::ExecuteBash;
-use super::execute_qchat::ExecuteQChat;
 use super::fs_read::FsRead;
 use super::fs_write::FsWrite;
 use super::gh_issue::GhIssue;
 use super::use_aws::UseAws;
+use super::use_q_command::UseQCommand;
 use super::{
     Tool,
     ToolSpec,
@@ -194,7 +194,7 @@ impl ToolManager {
             "execute_bash" => Tool::ExecuteBash(serde_json::from_value::<ExecuteBash>(value.args).map_err(map_err)?),
             "use_aws" => Tool::UseAws(serde_json::from_value::<UseAws>(value.args).map_err(map_err)?),
             "report_issue" => Tool::GhIssue(serde_json::from_value::<GhIssue>(value.args).map_err(map_err)?),
-            "execute_qchat" => Tool::ExecuteQChat(serde_json::from_value::<ExecuteQChat>(value.args).map_err(map_err)?),
+            "use_q_command" => Tool::UseQCommand(serde_json::from_value::<UseQCommand>(value.args).map_err(map_err)?),
             // Note that this name is namespaced with server_name{DELIMITER}tool_name
             name => {
                 let (server_name, tool_name) = name.split_once(NAMESPACE_DELIMITER).ok_or(ToolResult {

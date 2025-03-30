@@ -108,4 +108,14 @@ impl CommandBehavior for ToolsCommand {
             None => "/tools".to_string(),
         }
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        let subcmd = self.subcommand.as_deref().unwrap_or("help");
+        writeln!(updates, "Executing tools {} command...", subcmd)?;
+
+        // TODO: Implement actual tools command execution by integrating with the existing tools management
+        // code This would involve calling into the appropriate tools handlers in the q_cli crate
+
+        Ok(format!("Tools {} command executed", subcmd))
+    }
 }

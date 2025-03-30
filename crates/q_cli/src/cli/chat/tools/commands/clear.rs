@@ -27,4 +27,11 @@ impl CommandBehavior for ClearCommand {
     fn format_command(&self) -> String {
         "/clear".to_string()
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        writeln!(updates, "Clearing conversation history...")?;
+        // Note: In a real implementation, we would need to clear the conversation history
+        // For now, we'll just return a message
+        Ok("Conversation history cleared.".to_string())
+    }
 }

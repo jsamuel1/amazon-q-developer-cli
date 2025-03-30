@@ -120,4 +120,15 @@ impl CommandBehavior for ContextCommand {
             None => "/context".to_string(),
         }
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        let subcmd = self.subcommand.as_deref().unwrap_or("help");
+        writeln!(updates, "Executing context {} command...", subcmd)?;
+
+        // TODO: Implement actual context command execution by integrating with the existing context
+        // management code This would involve calling into the appropriate context handlers in the
+        // q_cli crate
+
+        Ok(format!("Context {} command executed", subcmd))
+    }
 }

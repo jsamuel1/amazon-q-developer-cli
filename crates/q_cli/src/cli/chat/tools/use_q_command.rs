@@ -9,15 +9,16 @@ use tracing::{
     info,
 };
 
+use super::command_executor::CommandExecutor;
 use super::commands::CommandRegistry;
 use super::{
     InvokeOutput,
     OutputKind,
 };
 
-/// Request structure for the execute_qchat tool
+/// Request structure for the use_q_command tool
 #[derive(Debug, Clone, Deserialize)]
-pub struct ExecuteQChat {
+pub struct UseQCommand {
     /// The command to execute (e.g., "quit", "context", "settings")
     pub command: String,
 
@@ -34,39 +35,35 @@ pub struct ExecuteQChat {
     pub flags: Option<HashMap<String, String>>,
 }
 
-impl ExecuteQChat {
+impl UseQCommand {
     /// Invokes the tool to execute the command
     pub async fn invoke(&self, ctx: &Context, updates: &mut dyn Write) -> Result<InvokeOutput> {
         // Log the command being executed
         info!(
-            "Executing qchat command: {} {:?} {:?}",
+            "Executing Q command: {} {:?} {:?}",
             self.command, self.subcommand, self.args
         );
 
-        // Get the appropriate command implementation from the registry
-        let command = CommandRegistry::get_command(&self.command, self.subcommand.as_deref())
-            .ok_or_else(|| eyre::eyre!("Unsupported command: {}", self.command))?;
+        // Convert flags HashMap to Vec of tuples for CommandExecutor
+        let flags_vec = self
+            .flags
+            .as_ref()
+            .map(|flags| flags.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<Vec<_>>());
 
-        // Validate the command
-        command.validate(ctx)?;
+        // Execute the command using the CommandExecutor
+        let result = CommandExecutor::execute_command(
+            &self.command,
+            self.subcommand.as_deref(),
+            self.args.as_deref(),
+            flags_vec.as_deref(),
+            ctx,
+            updates,
+        )?;
 
-        // Queue up a description of what the command will do
-        command.queue_description(updates)?;
-
-        // Format the command for execution
-        let formatted_command = command.format_command();
-
-        // In a real implementation, we would execute the command here
-        // For now, we'll just return a message about what would be executed
-        let output = format!("Command executed: {}", formatted_command);
-
-        // TODO: Implement actual command execution by integrating with the existing command infrastructure
-        // This would involve calling into the appropriate command handlers in the q_cli crate
-
-        debug!("Command execution result: {}", output);
+        debug!("Command execution result: {}", result);
 
         Ok(InvokeOutput {
-            output: OutputKind::Text(output),
+            output: OutputKind::Text(result),
         })
     }
 

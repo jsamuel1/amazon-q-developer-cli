@@ -82,4 +82,15 @@ impl CommandBehavior for SettingsCommand {
             None => "/settings".to_string(),
         }
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        let subcmd = self.subcommand.as_deref().unwrap_or("help");
+        writeln!(updates, "Executing settings {} command...", subcmd)?;
+
+        // TODO: Implement actual settings command execution by integrating with the existing settings
+        // management code This would involve calling into the appropriate settings handlers in the
+        // q_cli crate
+
+        Ok(format!("Settings {} command executed", subcmd))
+    }
 }

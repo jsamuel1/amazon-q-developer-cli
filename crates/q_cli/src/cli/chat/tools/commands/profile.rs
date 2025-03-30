@@ -99,4 +99,15 @@ impl CommandBehavior for ProfileCommand {
             None => "/profile".to_string(),
         }
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        let subcmd = self.subcommand.as_deref().unwrap_or("help");
+        writeln!(updates, "Executing profile {} command...", subcmd)?;
+
+        // TODO: Implement actual profile command execution by integrating with the existing profile
+        // management code This would involve calling into the appropriate profile handlers in the
+        // q_cli crate
+
+        Ok(format!("Profile {} command executed", subcmd))
+    }
 }

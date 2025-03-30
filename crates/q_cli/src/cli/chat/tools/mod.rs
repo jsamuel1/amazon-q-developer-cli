@@ -1,13 +1,14 @@
 pub mod command_behavior;
+pub mod command_executor;
 pub mod commands;
 pub mod custom_tool;
 pub mod execute_bash;
-pub mod execute_qchat;
 pub mod fs_read;
 pub mod fs_write;
 pub mod gh_issue;
 pub mod tool_manager;
 pub mod use_aws;
+pub mod use_q_command;
 
 use std::io::Write;
 use std::path::{
@@ -21,7 +22,6 @@ use aws_smithy_types::{
 };
 use custom_tool::CustomTool;
 use execute_bash::ExecuteBash;
-use execute_qchat::ExecuteQChat;
 use eyre::Result;
 use fig_os_shim::Context;
 use fs_read::FsRead;
@@ -29,6 +29,7 @@ use fs_write::FsWrite;
 use gh_issue::GhIssue;
 use serde::Deserialize;
 use use_aws::UseAws;
+use use_q_command::UseQCommand;
 
 pub const MAX_TOOL_RESPONSE_SIZE: usize = 800000;
 
@@ -41,7 +42,7 @@ pub enum Tool {
     UseAws(UseAws),
     Custom(CustomTool),
     GhIssue(GhIssue),
-    ExecuteQChat(ExecuteQChat),
+    UseQCommand(UseQCommand),
 }
 
 impl Tool {
@@ -54,7 +55,7 @@ impl Tool {
             Tool::UseAws(_) => "Use AWS CLI",
             Tool::Custom(custom_tool) => &custom_tool.name,
             Tool::GhIssue(_) => "Prepare GitHub issue",
-            Tool::ExecuteQChat(_) => "Execute Q chat command",
+            Tool::UseQCommand(_) => "Use Q command",
         }
         .to_owned()
     }
@@ -68,8 +69,8 @@ impl Tool {
             Tool::UseAws(_) => "Using AWS CLI",
             Tool::Custom(custom_tool) => &custom_tool.name,
             Tool::GhIssue(_) => "Preparing GitHub issue",
-            Tool::ExecuteQChat(execute_qchat) => {
-                return format!("Executing Q command `{}`", execute_qchat.format_command());
+            Tool::UseQCommand(use_q_command) => {
+                return format!("Using Q command `{}`", use_q_command.format_command());
             },
         }
         .to_owned()
@@ -84,7 +85,7 @@ impl Tool {
             Tool::UseAws(use_aws) => use_aws.requires_acceptance(),
             Tool::Custom(_) => false,
             Tool::GhIssue(_) => false,
-            Tool::ExecuteQChat(execute_qchat) => execute_qchat.requires_acceptance(),
+            Tool::UseQCommand(use_q_command) => use_q_command.requires_acceptance(),
         }
     }
 
@@ -97,7 +98,7 @@ impl Tool {
             Tool::UseAws(use_aws) => use_aws.invoke(context, updates).await,
             Tool::Custom(custom_tool) => custom_tool.invoke(context, updates).await,
             Tool::GhIssue(gh_issue) => gh_issue.invoke(updates).await,
-            Tool::ExecuteQChat(execute_qchat) => execute_qchat.invoke(context, updates).await,
+            Tool::UseQCommand(use_q_command) => use_q_command.invoke(context, updates).await,
         }
     }
 
@@ -110,7 +111,7 @@ impl Tool {
             Tool::UseAws(use_aws) => use_aws.queue_description(updates),
             Tool::Custom(custom_tool) => custom_tool.queue_description(updates),
             Tool::GhIssue(gh_issue) => gh_issue.queue_description(updates),
-            Tool::ExecuteQChat(execute_qchat) => execute_qchat.queue_description(updates),
+            Tool::UseQCommand(use_q_command) => use_q_command.queue_description(updates),
         }
     }
 
@@ -123,7 +124,7 @@ impl Tool {
             Tool::UseAws(use_aws) => use_aws.validate(ctx).await,
             Tool::Custom(custom_tool) => custom_tool.validate(ctx).await,
             Tool::GhIssue(gh_issue) => gh_issue.validate(ctx).await,
-            Tool::ExecuteQChat(execute_qchat) => execute_qchat.validate(ctx),
+            Tool::UseQCommand(use_q_command) => use_q_command.validate(ctx),
         }
     }
 }

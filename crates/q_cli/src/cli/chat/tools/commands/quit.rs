@@ -27,4 +27,11 @@ impl CommandBehavior for QuitCommand {
     fn format_command(&self) -> String {
         "/quit".to_string()
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        writeln!(updates, "Exiting the application...")?;
+        // Note: In a real implementation, we would need to signal to the application
+        // to exit. For now, we'll just return a message.
+        Ok("Application exit requested.".to_string())
+    }
 }

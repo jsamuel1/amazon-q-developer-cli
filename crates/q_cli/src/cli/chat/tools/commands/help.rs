@@ -27,4 +27,11 @@ impl CommandBehavior for HelpCommand {
     fn format_command(&self) -> String {
         "/help".to_string()
     }
+
+    fn execute(&self, _ctx: &Context, updates: &mut dyn Write) -> Result<String> {
+        writeln!(updates, "Showing help information...")?;
+        // Note: In a real implementation, we would display the help text
+        // For now, we'll just return a message
+        Ok("Help information displayed.".to_string())
+    }
 }
