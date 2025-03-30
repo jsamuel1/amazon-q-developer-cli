@@ -15,9 +15,9 @@
       ]
     }
   },
-  "execute_qchat": {
-    "name": "execute_qchat",
-    "description": "Execute internal commands within the q chat system. This allows the AI assistant to directly execute commands like /quit, /clear, /help, or manage context, profiles, tools, and settings.",
+  "use_q_command": {
+    "name": "use_q_command",
+    "description": "Execute internal commands within the q chat system. This allows the AI assistant to directly execute commands like /quit, /clear, /help, or manage context, profiles, tools, and settings.\n\nAvailable commands and subcommands:\n\n1. /context - Manage context files for a profile\n   - help: Show context help information\n   - show: Show current context\n   - add: Add context from file(s)\n   - rm: Remove context item(s)\n   - clear: Clear all context\n   - query: Query conversation history\n   - prune: Prune conversation history\n   - rollback: Roll back conversation to previous point\n   - summarize: Summarize conversation history\n   - export: Export conversation history\n   - import: Import conversation history\n\n2. /profile - Manage profiles for the chat session\n   - help: Show profile help information\n   - list: List available profiles\n   - set: Set active profile\n   - create: Create new profile\n   - delete: Delete profile\n   - rename: Rename profile\n\n3. /settings - Manage settings\n   - list: List current settings\n   - set: Set configuration\n   - reset: Reset settings to default\n\n4. /tools - Manage tools\n   - list: List available tools\n   - enable: Enable tool\n   - disable: Disable tool\n   - install: Install tool\n   - uninstall: Uninstall tool\n   - update: Update tools\n   - info: Show information about tool\n\n5. /help - Show help information\n\n6. /quit - Exit the application\n\n7. /clear - Clear the screen",
     "input_schema": {
       "type": "object",
       "properties": {
